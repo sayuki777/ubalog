@@ -236,14 +236,14 @@ export default function RecordForm() {
   return (
     <main className="mx-auto min-h-screen w-full max-w-[430px] bg-gray-50 pb-24">
       <AppHeader />
-      <Toast message={isEditing ? "譖ｴ譁ｰ縺励∪縺励◆" : "菫晏ｭ倥＠縺ｾ縺励◆"} show={showToast} />
+      <Toast message={isEditing ? "更新しました" : "保存しました"} show={showToast} />
 
       <div className="sticky top-16 z-20 border-b bg-white px-4 pb-4 pt-4">
         <div className="flex items-center justify-between">
           <div>
-            <div className="text-xl font-bold text-gray-900">險倬鹸繧偵▽縺代ｋ</div>
+            <div className="text-xl font-bold text-gray-900">記録をつける</div>
             <div className="mt-1 text-xs font-bold text-green-700">
-              {isEditing ? `${date.replaceAll("-", "/")} 縺ｮ險倬鹸繧堤ｷｨ髮・ｸｭ` : "譁ｰ隕剰ｨ倬鹸"}
+              {isEditing ? `${date.replaceAll("-", "/")} の記録を編集中` : "新規記録"}
             </div>
           </div>
 
@@ -254,13 +254,13 @@ export default function RecordForm() {
                 : "bg-blue-50 text-blue-700"
             }`}
           >
-            {isEditing ? "邱ｨ髮" : "譁ｰ隕"}
+            {isEditing ? "編集" : "新規"}
           </div>
         </div>
 
         <div className="mt-3 flex items-center justify-between">
           <div className="flex items-center gap-2 text-sm text-gray-700">
-            <span>套</span>
+            <span>日付</span>
             <input
               type="date"
               value={date}
@@ -275,16 +275,16 @@ export default function RecordForm() {
         </div>
 
         <div className="mt-4 text-lg font-bold text-gray-900">
-          蜷郁ｨ・・･{total.toLocaleString()}縲譎らｵｦ ・･{hourly.toLocaleString()}
+          合計 ￥{total.toLocaleString()}　時給 ￥{hourly.toLocaleString()}
         </div>
       </div>
 
       <div className="px-4 py-4 pb-32">
         <div className="rounded-2xl bg-white p-4 shadow-sm">
-          <div className="text-base font-bold text-gray-900">遞ｼ蜒・{workText}</div>
+          <div className="text-base font-bold text-gray-900">稼働 {workText}</div>
 
           <div className="mt-3 flex flex-wrap items-center gap-2 text-sm text-gray-700">
-            <span>髢句ｧ</span>
+            <span>開始</span>
             <input
               type="time"
               value={startTime}
@@ -292,7 +292,7 @@ export default function RecordForm() {
               className="rounded-md border px-2 py-1"
             />
 
-            <span>邨ゆｺ</span>
+            <span>終了</span>
             <input
               type="time"
               value={endTime}
@@ -300,7 +300,7 @@ export default function RecordForm() {
               className="rounded-md border px-2 py-1"
             />
 
-            <span>莨第・</span>
+            <span>休憩</span>
             <select
               value={breakTime}
               onChange={(e) => setBreakTime(e.target.value)}
@@ -318,10 +318,10 @@ export default function RecordForm() {
 
           <div className="mt-4 space-y-3">
             <Row company="Uber" value={uber} count={uberCount} onChange={setUber} onCountChange={setUberCount} />
-            <Row company="蜃ｺ蜑埼､ｨ" value={demae} count={demaeCount} onChange={setDemae} onCountChange={setDemaeCount} />
+            <Row company="出前館" value={demae} count={demaeCount} onChange={setDemae} onCountChange={setDemaeCount} />
             <Row company="menu" value={menu} count={menuCount} onChange={setMenu} onCountChange={setMenuCount} />
             <Row company="Rocket" value={rocket} count={rocketCount} onChange={setRocket} onCountChange={setRocketCount} />
-            <Row company="縺昴・莉" value={other} count={otherCount} onChange={setOther} onCountChange={setOtherCount} />
+            <Row company="その他" value={other} count={otherCount} onChange={setOther} onCountChange={setOtherCount} />
           </div>
 
           <label className="mt-4 flex items-center gap-2 text-sm text-gray-800">
@@ -331,7 +331,7 @@ export default function RecordForm() {
               onChange={(e) => setRanking(e.target.checked)}
               className="h-4 w-4"
             />
-            繝ｩ繝ｳ繧ｭ繝ｳ繧ｰ縺ｫ蜿ょ刈縺吶ｋ
+            ランキングに参加する
           </label>
         </div>
       </div>
@@ -362,7 +362,7 @@ function Row({
       </div>
 
       <div className="flex items-center rounded-lg border border-gray-200 bg-white px-2 py-2 focus-within:border-green-500 focus-within:ring-2 focus-within:ring-green-100">
-        <span className="mr-1 text-sm text-gray-500">・･</span>
+        <span className="mr-1 text-sm text-gray-500">￥</span>
         <input
           type="text"
           inputMode="numeric"
@@ -382,9 +382,10 @@ function Row({
           onChange={(e) => onCountChange(e.target.value.replace(/[^\d]/g, ""))}
           className="w-10 border-none bg-transparent text-right text-sm outline-none"
         />
-        <span className="ml-1 text-sm text-gray-500">莉ｶ</span>
+        <span className="ml-1 text-sm text-gray-500">件</span>
       </div>
     </div>
   );
 }
+
 

@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
@@ -24,13 +24,13 @@ const menuCards = [
   {
     href: "/history",
     title: "記録一覧",
-    desc: "過去1年の記録を見る",
-    icon: "📚",
+    desc: "保存した記録を一覧で確認できます",
+    icon: "📅",
   },
   {
     href: "/ranking",
     title: "ランキング",
-    desc: "全国ランキングを見る",
+    desc: "ランキングを見る",
     icon: "🏆",
   },
   {
@@ -42,8 +42,8 @@ const menuCards = [
   {
     href: "/recruit",
     title: "配達員募集",
-    desc: "特典・キャンペーンを見る",
-    icon: "👥",
+    desc: "特典やキャンペーンを見る",
+    icon: "🎁",
   },
   {
     href: "/news",
@@ -85,7 +85,7 @@ function currentMonthPrefix() {
 
 function nicknameFromIndex(index: number) {
   if (index === 0) return "デリバリーマン";
-  if (index === 1) return "ウーバ太郎";
+  if (index === 1) return "ウーバー太郎";
   if (index === 2) return "出前の達人";
   return `参加者${index + 1}`;
 }
@@ -107,9 +107,13 @@ export default function HomeDashboard() {
       }
     };
 
-    load();
+    const timer = window.setTimeout(load, 0);
     window.addEventListener("focus", load);
-    return () => window.removeEventListener("focus", load);
+
+    return () => {
+      window.clearTimeout(timer);
+      window.removeEventListener("focus", load);
+    };
   }, []);
 
   const today = todayIsoDate();

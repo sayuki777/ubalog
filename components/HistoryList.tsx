@@ -32,28 +32,6 @@ type CalendarCell = {
   day: number | null;
 };
 
-function parseIsoDate(dateStr: string) {
-  const [year, month, day] = dateStr.split("-").map(Number);
-  return new Date(year, month - 1, day);
-}
-
-function daysDiffFromToday(dateStr: string) {
-  const today = new Date();
-  const target = parseIsoDate(dateStr);
-  const todayTime = new Date(
-    today.getFullYear(),
-    today.getMonth(),
-    today.getDate()
-  ).getTime();
-  const targetTime = new Date(
-    target.getFullYear(),
-    target.getMonth(),
-    target.getDate()
-  ).getTime();
-
-  return Math.floor((todayTime - targetTime) / (1000 * 60 * 60 * 24));
-}
-
 function formatCurrency(amount: number) {
   return `￥${amount.toLocaleString()}`;
 }
@@ -142,18 +120,10 @@ export default function HistoryList() {
   }, []);
 
 
-  const recent1Year = useMemo(() => {
-    return records
-      .filter((item) => {
-        const diff = daysDiffFromToday(item.date);
-        return diff >= 0 && diff <= 365;
-      })
-      .sort((a, b) => (a.date < b.date ? 1 : -1));
+  const sortedRecords = useMemo(() => {
+    return [...records].sort((a, b) => (a.date < b.date ? 1 : -1));
   }, [records]);
 
-  const olderCount = useMemo(() => {
-    return records.filter((item) => daysDiffFromToday(item.date) > 365).length;
-  }, [records]);
 
   const monthRecordsMap = useMemo(() => {
     const map = new Map<string, StoredRecord>();
@@ -197,7 +167,7 @@ export default function HistoryList() {
             <div>
               <h2 className="text-xl font-bold text-gray-900">記録一覧</h2>
               <p className="mt-1 text-sm text-gray-500">
-                過去1年分の記録を確認できます
+                カレンダーから記録を確認できます
               </p>
             </div>
 
@@ -293,11 +263,6 @@ export default function HistoryList() {
             </div>
           </div>
 
-          {olderCount > 0 && (
-            <div className="mt-4 rounded-xl bg-gray-50 px-4 py-3 text-xs text-gray-500">
-              1年より前の記録が {olderCount} 件あります
-            </div>
-          )}
         </section>
 
         <section className="mt-4 rounded-2xl bg-white p-4 shadow-sm">
@@ -305,7 +270,7 @@ export default function HistoryList() {
             記録テーブル
           </div>
 
-          {recent1Year.length === 0 ? (
+          {sortedRecords.length === 0 ? (
             <div className="rounded-2xl px-4 py-8 text-center text-sm text-gray-500">
               まだ記録がありません
             </div>
@@ -327,7 +292,7 @@ export default function HistoryList() {
                   </tr>
                 </thead>
                 <tbody>
-                  {recent1Year.map((item) => (
+                  {sortedRecords.map((item) => (
                     <tr
                       key={item.date}
                       className={`border-b last:border-b-0 ${
@@ -389,6 +354,7 @@ export default function HistoryList() {
     </main>
   );
 }
+
 
 
 
