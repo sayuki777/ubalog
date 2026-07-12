@@ -1,11 +1,5 @@
-﻿import SimplePage from "../../components/SimplePage";
+﻿import ProfilePage from "@/components/ProfilePage";
 
-export default function ProfilePage() {
-  return (
-    <SimplePage
-      title="マイページ"
-      description="プロフィールや設定をここにまとめます。"
-      emoji="👤"
-    />
-  );
+export default function Page() {
+  return <ProfilePage />;
 }

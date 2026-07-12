@@ -6,11 +6,25 @@ import AppHeader from "@/components/AppHeader";
 import BottomMenu from "@/components/BottomMenu";
 import SaveButton from "@/components/SaveButton";
 import Toast from "@/components/Toast";
+import { PREFECTURES } from "@/lib/areas";
+import { getMonthlyGoal } from "@/lib/goals";
+import {
+  createUserFromInput,
+  ensureActiveUserFromProfile,
+  setActiveUser,
+} from "@/lib/users";
 
 const STORAGE_KEY = "ubalog-records";
+const PROFILE_STORAGE_KEY = "ubalog-profile";
 
 type StoredRecord = {
   date: string;
+  userId?: string;
+  name?: string;
+  prefecture?: string;
+  region?: string;
+  area?: string;
+  comment?: string;
   total: number;
   ranking: boolean;
   hourly: number;
@@ -29,6 +43,16 @@ type StoredRecord = {
   updatedAt: string;
 };
 
+type Profile = {
+  name?: string;
+  nickname?: string;
+  rankingName?: string;
+  prefecture?: string;
+  region?: string;
+  area?: string;
+  mainService?: string;
+};
+
 function loadRecords(): StoredRecord[] {
   if (typeof window === "undefined") return [];
   const raw = localStorage.getItem(STORAGE_KEY);
@@ -44,12 +68,46 @@ function saveRecords(records: StoredRecord[]) {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(records));
 }
 
+function loadProfile(): Profile {
+  if (typeof window === "undefined") return {};
+  const raw = localStorage.getItem(PROFILE_STORAGE_KEY);
+  if (!raw) return {};
+
+  try {
+    return JSON.parse(raw) as Profile;
+  } catch {
+    return {};
+  }
+}
+
+function saveProfile(profile: Profile) {
+  localStorage.setItem(PROFILE_STORAGE_KEY, JSON.stringify(profile));
+  window.dispatchEvent(new Event("ubalog-profile-updated"));
+}
+
+function profileDisplayName(profile: Profile) {
+  return (
+    profile.name?.trim() ||
+    profile.rankingName?.trim() ||
+    profile.nickname?.trim() ||
+    "匿名配達員"
+  );
+}
+
 function todayIsoDate() {
   const now = new Date();
   const y = now.getFullYear();
   const m = String(now.getMonth() + 1).padStart(2, "0");
   const d = String(now.getDate()).padStart(2, "0");
   return `${y}-${m}-${d}`;
+}
+
+function monthKeyFromDate(iso: string) {
+  return iso.slice(0, 7);
+}
+
+function formatCurrency(amount: number) {
+  return `￥${amount.toLocaleString()}`;
 }
 
 export default function RecordForm() {
@@ -74,8 +132,13 @@ export default function RecordForm() {
   const [otherCount, setOtherCount] = useState("");
 
   const [ranking, setRanking] = useState(true);
+  const [profileName, setProfileName] = useState("");
+  const [prefecture, setPrefecture] = useState("");
+  const [profileArea, setProfileArea] = useState("");
+  const [comment, setComment] = useState("");
   const [loaded, setLoaded] = useState(false);
   const [showToast, setShowToast] = useState(false);
+  const [toastMessage, setToastMessage] = useState("");
   const [saving, setSaving] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
 
@@ -93,7 +156,14 @@ export default function RecordForm() {
   useEffect(() => {
     const timer = window.setTimeout(() => {
       const records = loadRecords();
+      const profile = loadProfile();
+      const activeUser = ensureActiveUserFromProfile(profile);
       const current = records.find((item) => item.date === date);
+      setProfileName(
+        activeUser?.name ?? profile.name ?? profile.rankingName ?? profile.nickname ?? ""
+      );
+      setPrefecture(activeUser?.prefecture ?? profile.prefecture ?? "");
+      setProfileArea(activeUser?.area ?? profile.area ?? "");
 
       if (current) {
         setIsEditing(true);
@@ -115,6 +185,7 @@ export default function RecordForm() {
         setOtherCount(current.services.other.deliveries > 0 ? String(current.services.other.deliveries) : "");
 
         setRanking(current.ranking);
+        setComment(current.comment ?? "");
       } else {
         setIsEditing(false);
 
@@ -135,6 +206,7 @@ export default function RecordForm() {
         setOtherCount("");
 
         setRanking(true);
+        setComment("");
       }
 
       setLoaded(true);
@@ -142,6 +214,40 @@ export default function RecordForm() {
 
     return () => window.clearTimeout(timer);
   }, [date]);
+
+  const saveUserInfo = (nextName: string, nextPrefecture: string, nextArea: string) => {
+    const user = createUserFromInput({
+      name: nextName,
+      prefecture: nextPrefecture,
+      area: nextArea,
+    });
+    const currentProfile = loadProfile();
+    const nextProfile: Profile = {
+      ...currentProfile,
+      name: user.name,
+      prefecture: user.prefecture,
+      region: user.region,
+      area: user.area,
+    };
+    saveProfile(nextProfile);
+    setActiveUser(user);
+  };
+
+  const handleNameChange = (value: string) => {
+    const next = value.slice(0, 10);
+    setProfileName(next);
+    saveUserInfo(next, prefecture, profileArea);
+  };
+
+  const handlePrefectureChange = (value: string) => {
+    setPrefecture(value);
+    saveUserInfo(profileName, value, profileArea);
+  };
+
+  const handleAreaChange = (value: string) => {
+    setProfileArea(value);
+    saveUserInfo(profileName, prefecture, value);
+  };
 
   const total = useMemo(() => {
     return (
@@ -173,15 +279,50 @@ export default function RecordForm() {
     return `${h}:${String(m).padStart(2, "0")}`;
   }, [workMinutes]);
 
+  const dailyGoalAmount = useMemo(() => {
+    if (typeof window === "undefined") return 0;
+    const plan = getMonthlyGoal(monthKeyFromDate(date));
+    return plan?.dailyGoals.find((goal) => goal.date === date)?.targetAmount ?? 0;
+  }, [date]);
+
+  const goalDiff = total - dailyGoalAmount;
+  const goalMessage =
+    dailyGoalAmount > 0
+      ? goalDiff >= 0
+        ? `目標達成！ +${formatCurrency(goalDiff)}`
+        : `あと ${formatCurrency(Math.abs(goalDiff))}`
+      : "";
+
   const handleSave = () => {
     if (saving) return;
 
     const now = new Date().toISOString();
     const records = loadRecords();
     const existing = records.find((item) => item.date === date);
+    const currentProfile = loadProfile();
+    const activeUser = createUserFromInput({
+      name: profileName,
+      prefecture,
+      area: profileArea,
+    });
+    setActiveUser(activeUser);
+    const nextProfile: Profile = {
+      ...currentProfile,
+      name: activeUser.name,
+      prefecture: activeUser.prefecture,
+      region: activeUser.region,
+      area: activeUser.area,
+    };
+    saveProfile(nextProfile);
 
     const newRecord: StoredRecord = {
       date,
+      userId: activeUser.id,
+      name: profileDisplayName(nextProfile),
+      prefecture: nextProfile.prefecture,
+      region: nextProfile.region,
+      area: nextProfile.area,
+      comment: comment.trim(),
       startTime,
       endTime,
       breakMinutes: parseInt(breakTime || "0", 10) || 0,
@@ -222,6 +363,15 @@ export default function RecordForm() {
 
     saveRecords(next);
 
+    if (dailyGoalAmount > 0) {
+      setToastMessage(
+        goalDiff >= 0
+          ? "記録しました。今日の目標達成！"
+          : `記録しました。目標まであと ${formatCurrency(Math.abs(goalDiff))}`
+      );
+    } else {
+      setToastMessage(isEditing ? "更新しました" : "保存しました");
+    }
     setSaving(true);
     setShowToast(true);
 
@@ -236,29 +386,46 @@ export default function RecordForm() {
   return (
     <main className="mx-auto min-h-screen w-full max-w-[430px] bg-gray-50 pb-24">
       <AppHeader />
-      <Toast message={isEditing ? "更新しました" : "保存しました"} show={showToast} />
+      <Toast
+        message={toastMessage || (isEditing ? "更新しました" : "保存しました")}
+        show={showToast}
+      />
 
-      <div className="sticky top-16 z-20 border-b bg-white px-4 pb-4 pt-4">
-        <div className="flex items-center justify-between">
-          <div>
-            <div className="text-xl font-bold text-gray-900">記録をつける</div>
-            <div className="mt-1 text-xs font-bold text-green-700">
-              {isEditing ? `${date.replaceAll("-", "/")} の記録を編集中` : "新規記録"}
-            </div>
-          </div>
-
-          <div
-            className={`rounded-full px-3 py-1 text-xs font-bold ${
-              isEditing
-                ? "bg-green-50 text-green-700"
-                : "bg-blue-50 text-blue-700"
-            }`}
+      <div className="sticky top-16 z-20 border-b bg-white px-4 pb-3 pt-3">
+        <div className="grid grid-cols-[1fr_1fr_1fr] gap-2">
+          <input
+            type="text"
+            value={profileName}
+            maxLength={10}
+            onChange={(e) => handleNameChange(e.target.value)}
+            className="h-10 min-w-0 rounded-xl border border-gray-200 bg-gray-50 px-2 text-sm font-bold outline-none focus:border-green-500 focus:ring-2 focus:ring-green-100"
+            placeholder="表示名"
+            aria-label="表示名"
+          />
+          <select
+            value={prefecture}
+            onChange={(e) => handlePrefectureChange(e.target.value)}
+            className="h-10 min-w-0 rounded-xl border border-gray-200 bg-gray-50 px-2 text-sm font-bold outline-none focus:border-green-500 focus:ring-2 focus:ring-green-100"
+            aria-label="都道府県"
           >
-            {isEditing ? "編集" : "新規"}
-          </div>
+            <option value="">都道府県</option>
+            {PREFECTURES.map((item) => (
+              <option key={item} value={item}>
+                {item}
+              </option>
+            ))}
+          </select>
+          <input
+            type="text"
+            value={profileArea}
+            onChange={(e) => handleAreaChange(e.target.value)}
+            className="h-10 min-w-0 rounded-xl border border-gray-200 bg-gray-50 px-2 text-sm font-bold outline-none focus:border-green-500 focus:ring-2 focus:ring-green-100"
+            placeholder="エリア"
+            aria-label="エリア"
+          />
         </div>
 
-        <div className="mt-3 flex items-center justify-between">
+        <div className="mt-3 flex items-center justify-between gap-3">
           <div className="flex items-center gap-2 text-sm text-gray-700">
             <span>日付</span>
             <input
@@ -269,13 +436,40 @@ export default function RecordForm() {
             />
           </div>
 
-          <div className="rounded-full bg-green-50 px-3 py-1 text-xs font-bold text-green-700">
+          <div className="shrink-0 rounded-full bg-green-50 px-3 py-1 text-xs font-bold text-green-700">
             {date.replaceAll("-", "/")}
           </div>
         </div>
 
-        <div className="mt-4 text-lg font-bold text-gray-900">
-          合計 ￥{total.toLocaleString()}　時給 ￥{hourly.toLocaleString()}
+        <div className="mt-3 rounded-2xl bg-green-50 px-3 py-2">
+          <div className="flex items-end justify-between gap-3">
+            <div>
+              <div className="text-[11px] font-bold text-green-700">合計</div>
+              <div className="text-xl font-black text-gray-900">
+                ￥{total.toLocaleString()}
+              </div>
+            </div>
+            <div className="text-right">
+              <div className="text-[11px] font-bold text-green-700">時給</div>
+              <div className="text-xl font-black text-gray-900">
+                ￥{hourly.toLocaleString()}
+              </div>
+            </div>
+            <div className="shrink-0 text-right">
+              <div className="text-[11px] font-bold text-gray-500">稼働</div>
+              <div className="text-sm font-black text-gray-700">{workText}</div>
+            </div>
+          </div>
+          {dailyGoalAmount > 0 && (
+            <div className="mt-2 flex items-center justify-between rounded-xl bg-white px-3 py-2 text-xs font-bold">
+              <div className="text-gray-600">
+                今日の目標 {formatCurrency(dailyGoalAmount)}
+              </div>
+              <div className={goalDiff >= 0 ? "text-green-700" : "text-gray-700"}>
+                {goalMessage}
+              </div>
+            </div>
+          )}
         </div>
       </div>
 
@@ -323,6 +517,18 @@ export default function RecordForm() {
             <Row company="Rocket" value={rocket} count={rocketCount} onChange={setRocket} onCountChange={setRocketCount} />
             <Row company="その他" value={other} count={otherCount} onChange={setOther} onCountChange={setOtherCount} />
           </div>
+
+          <label className="mt-4 block text-sm text-gray-800">
+            <span className="font-bold">一言コメント 任意</span>
+            <input
+              type="text"
+              value={comment}
+              maxLength={15}
+              onChange={(e) => setComment(e.target.value.slice(0, 15))}
+              className="mt-2 h-11 w-full rounded-xl border border-gray-200 bg-white px-3 text-sm outline-none focus:border-green-500 focus:ring-2 focus:ring-green-100"
+              placeholder="例: 雨で単価高め"
+            />
+          </label>
 
           <label className="mt-4 flex items-center gap-2 text-sm text-gray-800">
             <input

@@ -4,15 +4,32 @@ import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import AppHeader from "@/components/AppHeader";
 import BottomMenu from "@/components/BottomMenu";
+import PersonalDashboard from "@/components/PersonalDashboard";
+import TestOperationPanel from "@/components/TestOperationPanel";
+import {
+  ensureActiveUserFromProfile,
+  getActiveUser,
+  getDisplayNameFromProfileOrUser,
+} from "@/lib/users";
+
+type Profile = {
+  name?: string;
+  nickname: string;
+  area: string;
+  mainService: string;
+  rankingName: string;
+};
 
 type StoredRecord = {
   date: string;
+  name?: string;
   total: number;
   ranking: boolean;
   hourly: number;
 };
 
-const STORAGE_KEY = "ubalog-records";
+const RECORDS_STORAGE_KEY = "ubalog-records";
+const PROFILE_STORAGE_KEY = "ubalog-profile";
 
 const menuCards = [
   {
@@ -83,19 +100,32 @@ function currentMonthPrefix() {
   return `${y}-${m}`;
 }
 
-function nicknameFromIndex(index: number) {
-  if (index === 0) return "デリバリーマン";
-  if (index === 1) return "ウーバー太郎";
-  if (index === 2) return "出前の達人";
-  return `参加者${index + 1}`;
+function loadProfile(): Profile | null {
+  const raw = localStorage.getItem(PROFILE_STORAGE_KEY);
+  if (!raw) return null;
+
+  try {
+    return JSON.parse(raw) as Profile;
+  } catch {
+    return null;
+  }
+}
+
+function displayNameFromProfile(profile: Profile | null) {
+  return getDisplayNameFromProfileOrUser(profile, getActiveUser());
 }
 
 export default function HomeDashboard() {
   const [records, setRecords] = useState<StoredRecord[]>([]);
+  const [displayName, setDisplayName] = useState("匿名配達員");
 
   useEffect(() => {
     const load = () => {
-      const raw = localStorage.getItem(STORAGE_KEY);
+      const profile = loadProfile();
+      ensureActiveUserFromProfile(profile);
+      setDisplayName(displayNameFromProfile(profile));
+
+      const raw = localStorage.getItem(RECORDS_STORAGE_KEY);
       if (!raw) {
         setRecords([]);
         return;
@@ -141,10 +171,10 @@ export default function HomeDashboard() {
       .slice(0, 3)
       .map((item, index) => ({
         rank: index + 1,
-        name: nicknameFromIndex(index),
+        name: item.name?.trim() || displayName,
         amount: item.total,
       }));
-  }, [records, yesterday]);
+  }, [displayName, records, yesterday]);
 
   return (
     <main className="mx-auto min-h-screen w-full max-w-[430px] bg-gray-50 pb-24">
@@ -164,6 +194,8 @@ export default function HomeDashboard() {
             <StatCard title="今月の売上" value={`￥${monthTotal.toLocaleString()}`} />
           </div>
         </section>
+
+        <PersonalDashboard />
 
         <section className="mt-4 rounded-2xl bg-white p-4 shadow-sm">
           <div className="text-base font-bold text-gray-900">前日のランキング TOP3</div>
@@ -228,6 +260,8 @@ export default function HomeDashboard() {
             </Link>
           ))}
         </section>
+
+        <TestOperationPanel />
       </div>
 
       <BottomMenu />

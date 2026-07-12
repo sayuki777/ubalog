@@ -1,5 +1,10 @@
+import { Suspense } from "react";
 import RecordForm from "../../components/RecordForm";
 
 export default function RecordPage() {
-  return <RecordForm />;
+  return (
+    <Suspense fallback={null}>
+      <RecordForm />
+    </Suspense>
+  );
 }

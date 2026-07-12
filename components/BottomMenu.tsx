@@ -4,18 +4,18 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 
 const items = [
-  { href: "/", label: "ホーム", icon: "🏠" },
+  { href: "/", label: "マイページ", icon: "👤" },
   { href: "/record", label: "記録", icon: "📝" },
-  { href: "/ranking", label: "ランク", icon: "🏆" },
+  { href: "/ranking", label: "ランキング", icon: "🏆" },
   { href: "/realtime", label: "共有", icon: "📡" },
-  { href: "/news", label: "ゲーム/ニュース", icon: "🎮" },
+  { href: "/news", label: "ニュース", icon: "📰" },
 ];
 
 export default function BottomMenu() {
   const pathname = usePathname();
 
   return (
-    <nav className="fixed bottom-0 left-0 right-0 z-50 border-t border-gray-200 bg-white">
+    <nav className="fixed bottom-0 left-0 right-0 z-50 border-t border-gray-200 bg-white pb-[env(safe-area-inset-bottom)]">
       <div className="mx-auto flex h-16 w-full max-w-[430px] items-center justify-around px-2">
         {items.map((item) => {
           const active =

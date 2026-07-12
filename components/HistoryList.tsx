@@ -9,6 +9,7 @@ const STORAGE_KEY = "ubalog-records";
 
 type StoredRecord = {
   date: string;
+  comment?: string;
   total: number;
   ranking: boolean;
   hourly: number;
@@ -288,6 +289,7 @@ export default function HistoryList() {
                     <th className="px-2 py-2 text-right">menu</th>
                     <th className="px-2 py-2 text-right">Rocket</th>
                     <th className="px-2 py-2 text-right">その他</th>
+                    <th className="px-2 py-2">コメント</th>
                     <th className="px-2 py-2 text-center">操作</th>
                   </tr>
                 </thead>
@@ -330,6 +332,9 @@ export default function HistoryList() {
                       </td>
                       <td className="whitespace-nowrap px-2 py-3 text-right text-gray-700">
                         {formatCurrency(item.services.other.amount)}
+                      </td>
+                      <td className="max-w-[180px] truncate px-2 py-3 text-gray-700">
+                        {item.comment?.trim() || "-"}
                       </td>
                       <td className="whitespace-nowrap px-2 py-3 text-center">
                         <button
