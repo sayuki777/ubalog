@@ -86,10 +86,7 @@ export default function DataBackupPanel() {
       <div>
         <h2 className="text-lg font-bold text-gray-900">データのバックアップ</h2>
         <p className="mt-1 text-sm text-gray-500">
-          記録データを端末に保存できます
-        </p>
-        <p className="mt-1 text-sm text-gray-500">
-          機種変更や開発中の確認用に使えます
+          記録・目標・ニュースなどを保存できます
         </p>
       </div>
 
@@ -99,7 +96,7 @@ export default function DataBackupPanel() {
           onClick={handleDownload}
           className="h-12 rounded-xl bg-green-600 px-4 text-sm font-bold text-white shadow-sm active:scale-[0.99]"
         >
-          バックアップを書き出す
+          バックアップを作成
         </button>
 
         <button
@@ -110,7 +107,7 @@ export default function DataBackupPanel() {
           }}
           className="h-12 rounded-xl border border-green-600 bg-white px-4 text-sm font-bold text-green-700 active:bg-green-50"
         >
-          バックアップを読み込む
+          バックアップを復元
         </button>
       </div>
 
@@ -120,7 +117,7 @@ export default function DataBackupPanel() {
             このバックアップを復元しますか？
           </div>
           <p className="mt-1 text-xs font-bold text-gray-600">
-            現在の端末データをバックアップ内容に置き換えます
+            ウバログの保存データを、選んだファイルの内容に置き換えます
           </p>
 
           <div className="mt-3 grid grid-cols-2 gap-2 text-xs font-bold text-gray-700">
@@ -129,6 +126,12 @@ export default function DataBackupPanel() {
             </div>
             <div className="rounded-xl bg-white px-3 py-2">
               ユーザー数: {pendingBackup.users.length}件
+            </div>
+            <div className="rounded-xl bg-white px-3 py-2">
+              目標: {pendingBackup.goals?.length ?? 0}件
+            </div>
+            <div className="rounded-xl bg-white px-3 py-2">
+              ニュース: {pendingBackup.news?.length ?? 0}件
             </div>
             <div className="rounded-xl bg-white px-3 py-2">
               リアルタイム共有: {pendingBackup.realtimeOffers.length}件

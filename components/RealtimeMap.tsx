@@ -22,6 +22,7 @@ type MapOffer = {
   distanceKm: number;
   unitPrice: number;
   rank: OfferRank;
+  comment?: string;
   shopName?: string;
   dropoffArea?: string;
   lat?: number;
@@ -50,6 +51,20 @@ function rankColor(rank: OfferRank) {
   return "#6b7280";
 }
 
+function rankBorderColor(rank: OfferRank) {
+  if (rank === "S") return "#bbf7d0";
+  if (rank === "A") return "#99f6e4";
+  if (rank === "B") return "#fde68a";
+  return "#e5e7eb";
+}
+
+function rankLabel(rank: OfferRank) {
+  if (rank === "S") return "Sランク：神案件 🚀";
+  if (rank === "A") return "Aランク：優秀案件 👍";
+  if (rank === "B") return "Bランク：普通案件";
+  return "Cランク：慎重に判断";
+}
+
 function formatPinAmount(amount: number) {
   if (amount >= 10000) return `¥${Math.floor(amount / 1000)}k`;
   if (amount >= 1000 && String(amount).length > 4) {
@@ -62,11 +77,12 @@ function offerIcon(rank: OfferRank, amount: number, active: boolean) {
   const width = active ? 62 : 56;
   const height = active ? 34 : 30;
   const color = rankColor(rank);
+  const borderColor = rank === "S" ? "#facc15" : rankBorderColor(rank);
   const label = formatPinAmount(amount);
 
   return L.divIcon({
     className: "",
-    html: `<div style="min-width:${width}px;height:${height}px;border-radius:9999px;background:${color};color:white;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:12px;border:3px solid white;box-shadow:0 8px 18px rgba(0,0,0,.25);padding:0 8px;white-space:nowrap;">${label}</div>`,
+    html: `<div style="min-width:${width}px;height:${height}px;border-radius:9999px;background:${color};color:white;display:flex;align-items:center;justify-content:center;font-weight:900;font-size:12px;border:3px solid ${borderColor};box-shadow:0 8px 18px rgba(0,0,0,.25);padding:0 9px;white-space:nowrap;">${label}</div>`,
     iconSize: [width, height],
     iconAnchor: [width / 2, height / 2],
   });
@@ -172,6 +188,7 @@ export default function RealtimeMap({
         const trimmedArea = offer.area.trim();
         const trimmedShopName = offer.shopName?.trim();
         const trimmedDropoffArea = offer.dropoffArea?.trim();
+        const trimmedComment = offer.comment?.trim();
 
         return (
           <Marker
@@ -197,7 +214,7 @@ export default function RealtimeMap({
                   <span
                     className={`rounded-full border px-2 py-1 text-xs font-bold ${rankBadgeClass(offer.rank)}`}
                   >
-                    {offer.rank}ランク
+                    {rankLabel(offer.rank)}
                   </span>
                   <span className="text-xs font-bold text-gray-600">
                     {offer.distanceKm.toLocaleString()}km
@@ -209,6 +226,7 @@ export default function RealtimeMap({
                   {trimmedArea && <div>エリア: {trimmedArea}</div>}
                   {trimmedShopName && <div>店舗名: {trimmedShopName}</div>}
                   {trimmedDropoffArea && <div>配達先方面: {trimmedDropoffArea}</div>}
+                  {trimmedComment && <div>コメント: {trimmedComment}</div>}
                 </div>
               </div>
             </Popup>

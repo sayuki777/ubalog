@@ -5,8 +5,12 @@ const STORAGE_KEYS = {
   profile: "ubalog-profile",
   users: "ubalog-users",
   activeUserId: "ubalog-active-user",
+  goals: "ubalog-goals",
+  news: "ubalog-news",
   realtimeOffers: "ubalog-realtime-offers",
   rocketNowScanFeedbacks: "ubalog-rocketnow-scan-feedbacks",
+  mood: "ubalog-mood",
+  highlightUpdates: "ubalog-highlight-updates",
 } as const;
 
 export type UbalogBackupData = {
@@ -16,8 +20,12 @@ export type UbalogBackupData = {
   profile: unknown | null;
   users: unknown[];
   activeUserId: string | null;
+  goals: unknown[];
+  news: unknown[];
   realtimeOffers: unknown[];
   rocketNowScanFeedbacks: unknown[];
+  mood: Record<string, unknown>;
+  highlightUpdates: unknown | null;
 };
 
 function readJsonValue<T>(key: string, fallback: T): T {
@@ -58,10 +66,17 @@ export function createUbalogBackup(): UbalogBackupData {
     profile: readJsonValue<unknown | null>(STORAGE_KEYS.profile, null),
     users: readJsonValue<unknown[]>(STORAGE_KEYS.users, []),
     activeUserId: readStringValue(STORAGE_KEYS.activeUserId),
+    goals: readJsonValue<unknown[]>(STORAGE_KEYS.goals, []),
+    news: readJsonValue<unknown[]>(STORAGE_KEYS.news, []),
     realtimeOffers: readJsonValue<unknown[]>(STORAGE_KEYS.realtimeOffers, []),
     rocketNowScanFeedbacks: readJsonValue<unknown[]>(
       STORAGE_KEYS.rocketNowScanFeedbacks,
       []
+    ),
+    mood: readJsonValue<Record<string, unknown>>(STORAGE_KEYS.mood, {}),
+    highlightUpdates: readJsonValue<unknown | null>(
+      STORAGE_KEYS.highlightUpdates,
+      null
     ),
   };
 }
@@ -95,8 +110,14 @@ export function validateUbalogBackup(data: unknown): data is UbalogBackupData {
   ) {
     return false;
   }
+  if ("goals" in data && !Array.isArray(data.goals)) return false;
+  if ("news" in data && !Array.isArray(data.news)) return false;
   if (!Array.isArray(data.realtimeOffers)) return false;
   if (!Array.isArray(data.rocketNowScanFeedbacks)) return false;
+  if ("mood" in data && !isPlainObject(data.mood)) return false;
+  if ("highlightUpdates" in data && data.highlightUpdates !== null) {
+    if (!isPlainObject(data.highlightUpdates)) return false;
+  }
 
   return true;
 }
@@ -118,9 +139,18 @@ export function restoreUbalogBackup(data: UbalogBackupData) {
     localStorage.removeItem(STORAGE_KEYS.activeUserId);
   }
 
+  writeJsonValue(STORAGE_KEYS.goals, data.goals ?? []);
+  writeJsonValue(STORAGE_KEYS.news, data.news ?? []);
   writeJsonValue(STORAGE_KEYS.realtimeOffers, data.realtimeOffers);
   writeJsonValue(
     STORAGE_KEYS.rocketNowScanFeedbacks,
     data.rocketNowScanFeedbacks
   );
+  writeJsonValue(STORAGE_KEYS.mood, data.mood ?? {});
+
+  if (data.highlightUpdates === null || typeof data.highlightUpdates === "undefined") {
+    localStorage.removeItem(STORAGE_KEYS.highlightUpdates);
+  } else {
+    writeJsonValue(STORAGE_KEYS.highlightUpdates, data.highlightUpdates);
+  }
 }

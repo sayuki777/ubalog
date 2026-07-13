@@ -14,7 +14,10 @@ export type UbalogUser = {
 };
 
 export type ProfileLike = {
+  displayName?: string;
   name?: string;
+  realName?: string;
+  fullName?: string;
   nickname?: string;
   rankingName?: string;
   prefecture?: string;
@@ -87,7 +90,7 @@ export function getActiveUser(): UbalogUser | null {
 export function createUserFromProfile(profile: ProfileLike): UbalogUser {
   const now = new Date().toISOString();
   const name = normalizeUserName(
-    profile.name || profile.rankingName || profile.nickname
+    profile.displayName || profile.name || profile.rankingName || profile.nickname
   );
 
   return {
@@ -129,7 +132,7 @@ export function ensureActiveUserFromProfile(profile: ProfileLike | null) {
   if (activeUser) return activeUser;
 
   if (!profile) return null;
-  const name = profile.name || profile.rankingName || profile.nickname;
+  const name = profile.displayName || profile.name || profile.rankingName || profile.nickname;
   if (!name?.trim()) return null;
 
   const user = createUserFromProfile(profile);
@@ -142,8 +145,9 @@ export function getDisplayNameFromProfileOrUser(
   user: UbalogUser | null
 ) {
   return (
-    user?.name?.trim() ||
+    profile?.displayName?.trim() ||
     profile?.name?.trim() ||
+    user?.name?.trim() ||
     profile?.rankingName?.trim() ||
     profile?.nickname?.trim() ||
     "匿名配達員"

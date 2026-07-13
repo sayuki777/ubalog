@@ -33,6 +33,7 @@ function readPlans(): MonthlyGoalPlan[] {
 
 function writePlans(plans: MonthlyGoalPlan[]) {
   localStorage.setItem(GOALS_STORAGE_KEY, JSON.stringify(plans));
+  window.dispatchEvent(new Event("ubalog-goals-updated"));
 }
 
 function toIsoDate(date: Date) {
@@ -115,4 +116,3 @@ export function updateDailyGoal(
     updatedAt: now,
   });
 }
-

@@ -1,11 +1,5 @@
-import SimplePage from "../../components/SimplePage";
+import RecruitPage from "@/components/RecruitPage";
 
-export default function RecruitPage() {
-  return (
-    <SimplePage
-      title="配達員募集"
-      description="紹介コード、キャンペーン、各社の募集導線をここにまとめます。"
-      emoji="👥"
-    />
-  );
+export default function Page() {
+  return <RecruitPage />;
 }

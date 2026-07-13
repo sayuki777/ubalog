@@ -1,13 +1,27 @@
 ﻿"use client";
 
 import { useEffect, useMemo, useState } from "react";
+import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import AppHeader from "@/components/AppHeader";
 import BottomMenu from "@/components/BottomMenu";
+import OnboardingCard from "@/components/OnboardingCard";
+import CongratsOverlay from "@/components/CongratsOverlay";
 import SaveButton from "@/components/SaveButton";
 import Toast from "@/components/Toast";
 import { PREFECTURES } from "@/lib/areas";
 import { getMonthlyGoal } from "@/lib/goals";
+import { saveHighlightUpdate, type HighlightField } from "@/lib/highlights";
+import {
+  RECORD_GUIDE_DISMISSED_KEY,
+  readStorageBoolean,
+  writeStorageBoolean,
+} from "@/lib/onboarding";
+import {
+  addBreakingRecordNews,
+  addNewsForRecord,
+  addTopUpdateNewsForRecord,
+} from "@/lib/news";
 import {
   createUserFromInput,
   ensureActiveUserFromProfile,
@@ -16,6 +30,13 @@ import {
 
 const STORAGE_KEY = "ubalog-records";
 const PROFILE_STORAGE_KEY = "ubalog-profile";
+const LAST_WORK_TIME_STORAGE_KEY = "ubalog-last-work-time";
+const BREAK_MINUTE_OPTIONS = Array.from({ length: 37 }, (_, index) => index * 5);
+
+type CongratsState = {
+  type: "daily" | "weekly" | "monthly";
+  message: string;
+} | null;
 
 type StoredRecord = {
   date: string;
@@ -44,13 +65,22 @@ type StoredRecord = {
 };
 
 type Profile = {
+  displayName?: string;
   name?: string;
+  realName?: string;
   nickname?: string;
   rankingName?: string;
   prefecture?: string;
   region?: string;
   area?: string;
   mainService?: string;
+};
+
+type LastWorkTime = {
+  startTime: string;
+  endTime: string;
+  breakMinutes: number;
+  updatedAt: string;
 };
 
 function loadRecords(): StoredRecord[] {
@@ -85,8 +115,16 @@ function saveProfile(profile: Profile) {
   window.dispatchEvent(new Event("ubalog-profile-updated"));
 }
 
+function saveLastWorkTime(value: Omit<LastWorkTime, "updatedAt">) {
+  localStorage.setItem(
+    LAST_WORK_TIME_STORAGE_KEY,
+    JSON.stringify({ ...value, updatedAt: new Date().toISOString() })
+  );
+}
+
 function profileDisplayName(profile: Profile) {
   return (
+    profile.displayName?.trim() ||
     profile.name?.trim() ||
     profile.rankingName?.trim() ||
     profile.nickname?.trim() ||
@@ -106,8 +144,98 @@ function monthKeyFromDate(iso: string) {
   return iso.slice(0, 7);
 }
 
+function toIsoDate(date: Date) {
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, "0");
+  const d = String(date.getDate()).padStart(2, "0");
+  return `${y}-${m}-${d}`;
+}
+
+function startOfWeek(date: Date) {
+  const day = date.getDay();
+  const diff = day === 0 ? -6 : 1 - day;
+  const start = new Date(date);
+  start.setDate(date.getDate() + diff);
+  return start;
+}
+
+function isInRange(value: string, start: string, end: string) {
+  return value >= start && value <= end;
+}
+
+function totalDeliveries(record: StoredRecord) {
+  return Object.values(record.services).reduce((sum, service) => sum + service.deliveries, 0);
+}
+
+function unitPrice(record: StoredRecord) {
+  const deliveries = totalDeliveries(record);
+  return deliveries > 0 ? Math.floor(record.total / deliveries) : 0;
+}
+
+function buildHighlightFields(record: StoredRecord, records: StoredRecord[]) {
+  const fields = new Set<HighlightField>();
+  const today = new Date();
+  const todayIso = toIsoDate(today);
+  const yesterday = new Date(today);
+  yesterday.setDate(today.getDate() - 1);
+  const yesterdayIso = toIsoDate(yesterday);
+  const thisWeekStart = toIsoDate(startOfWeek(today));
+  const thisWeekEndDate = new Date(thisWeekStart);
+  thisWeekEndDate.setDate(thisWeekEndDate.getDate() + 6);
+  const thisWeekEnd = toIsoDate(thisWeekEndDate);
+  const lastWeekStartDate = new Date(thisWeekStart);
+  lastWeekStartDate.setDate(lastWeekStartDate.getDate() - 7);
+  const lastWeekStart = toIsoDate(lastWeekStartDate);
+  const lastWeekEndDate = new Date(lastWeekStart);
+  lastWeekEndDate.setDate(lastWeekEndDate.getDate() + 6);
+  const lastWeekEnd = toIsoDate(lastWeekEndDate);
+
+  if (record.date === todayIso) fields.add("today");
+  if (record.date === yesterdayIso) fields.add("yesterday");
+  if (isInRange(record.date, thisWeekStart, thisWeekEnd)) fields.add("thisWeek");
+  if (isInRange(record.date, lastWeekStart, lastWeekEnd)) fields.add("lastWeek");
+
+  const monthRecords = records.filter((item) => item.date.startsWith(monthKeyFromDate(record.date)));
+  const maxTotal = Math.max(0, ...monthRecords.map((item) => item.total));
+  const maxUnitPrice = Math.max(0, ...monthRecords.map(unitPrice));
+  if (record.total > 0 && record.total >= maxTotal) fields.add("monthlyBest");
+  if (unitPrice(record) > 0 && unitPrice(record) >= maxUnitPrice) fields.add("bestUnitPrice");
+
+  return [...fields];
+}
+
+function getWeekRange(value: string) {
+  const [year, month, day] = value.split("-").map(Number);
+  const base = new Date(year, month - 1, day);
+  const start = startOfWeek(base);
+  const end = new Date(start);
+  end.setDate(start.getDate() + 6);
+  return { start: toIsoDate(start), end: toIsoDate(end) };
+}
+
+function sumRecords(records: StoredRecord[]) {
+  return records.reduce((sum, record) => sum + record.total, 0);
+}
+
 function formatCurrency(amount: number) {
   return `￥${amount.toLocaleString()}`;
+}
+
+function formatBreakMinutes(minutes: number) {
+  const h = Math.floor(minutes / 60);
+  const m = minutes % 60;
+  return `${h}:${String(m).padStart(2, "0")}`;
+}
+
+function roundTimeToFiveMinutes(value: string) {
+  const [hour, minute] = value.split(":").map(Number);
+  if (Number.isNaN(hour) || Number.isNaN(minute)) return value;
+
+  const roundedMinute = Math.round(minute / 5) * 5;
+  const nextHour = (hour + Math.floor(roundedMinute / 60)) % 24;
+  const nextMinute = roundedMinute % 60;
+
+  return `${String(nextHour).padStart(2, "0")}:${String(nextMinute).padStart(2, "0")}`;
 }
 
 export default function RecordForm() {
@@ -115,9 +243,9 @@ export default function RecordForm() {
   const searchParams = useSearchParams();
 
   const [date, setDate] = useState(todayIsoDate());
-  const [startTime, setStartTime] = useState("10:30");
-  const [endTime, setEndTime] = useState("20:30");
-  const [breakTime, setBreakTime] = useState("60");
+  const [startTime, setStartTime] = useState("");
+  const [endTime, setEndTime] = useState("");
+  const [breakTime, setBreakTime] = useState("");
 
   const [uber, setUber] = useState("");
   const [demae, setDemae] = useState("");
@@ -140,7 +268,12 @@ export default function RecordForm() {
   const [showToast, setShowToast] = useState(false);
   const [toastMessage, setToastMessage] = useState("");
   const [saving, setSaving] = useState(false);
+  const [congrats, setCongrats] = useState<CongratsState>(null);
   const [isEditing, setIsEditing] = useState(false);
+  const [recordCount, setRecordCount] = useState(0);
+  const [recordGuideDismissed, setRecordGuideDismissed] = useState(false);
+  const [showAfterSaveActions, setShowAfterSaveActions] = useState(false);
+  const [afterSaveMessage, setAfterSaveMessage] = useState("");
 
   useEffect(() => {
     const queryDate = searchParams.get("date");
@@ -159,8 +292,15 @@ export default function RecordForm() {
       const profile = loadProfile();
       const activeUser = ensureActiveUserFromProfile(profile);
       const current = records.find((item) => item.date === date);
+      setRecordCount(records.length);
+      setRecordGuideDismissed(readStorageBoolean(RECORD_GUIDE_DISMISSED_KEY));
       setProfileName(
-        activeUser?.name ?? profile.name ?? profile.rankingName ?? profile.nickname ?? ""
+        profile.displayName ??
+          profile.name ??
+          activeUser?.name ??
+          profile.rankingName ??
+          profile.nickname ??
+          ""
       );
       setPrefecture(activeUser?.prefecture ?? profile.prefecture ?? "");
       setProfileArea(activeUser?.area ?? profile.area ?? "");
@@ -168,9 +308,11 @@ export default function RecordForm() {
       if (current) {
         setIsEditing(true);
 
-        setStartTime(current.startTime);
-        setEndTime(current.endTime);
-        setBreakTime(String(current.breakMinutes));
+        setStartTime(current.startTime ?? "");
+        setEndTime(current.endTime ?? "");
+        setBreakTime(
+          typeof current.breakMinutes === "number" ? String(current.breakMinutes) : ""
+        );
 
         setUber(current.services.uber.amount > 0 ? String(current.services.uber.amount) : "");
         setDemae(current.services.demae.amount > 0 ? String(current.services.demae.amount) : "");
@@ -189,9 +331,9 @@ export default function RecordForm() {
       } else {
         setIsEditing(false);
 
-        setStartTime("10:30");
-        setEndTime("20:30");
-        setBreakTime("60");
+        setStartTime("");
+        setEndTime("");
+        setBreakTime("");
 
         setUber("");
         setDemae("");
@@ -215,6 +357,23 @@ export default function RecordForm() {
     return () => window.clearTimeout(timer);
   }, [date]);
 
+  useEffect(() => {
+    const syncProfileName = () => {
+      const profile = loadProfile();
+      setProfileName(profileDisplayName(profile));
+      setPrefecture(profile.prefecture ?? "");
+      setProfileArea(profile.area ?? "");
+    };
+
+    window.addEventListener("ubalog-profile-updated", syncProfileName);
+    window.addEventListener("focus", syncProfileName);
+
+    return () => {
+      window.removeEventListener("ubalog-profile-updated", syncProfileName);
+      window.removeEventListener("focus", syncProfileName);
+    };
+  }, []);
+
   const saveUserInfo = (nextName: string, nextPrefecture: string, nextArea: string) => {
     const user = createUserFromInput({
       name: nextName,
@@ -224,6 +383,7 @@ export default function RecordForm() {
     const currentProfile = loadProfile();
     const nextProfile: Profile = {
       ...currentProfile,
+      displayName: user.name,
       name: user.name,
       prefecture: user.prefecture,
       region: user.region,
@@ -260,8 +420,10 @@ export default function RecordForm() {
   }, [uber, demae, menu, rocket, other]);
 
   const workMinutes = useMemo(() => {
+    if (!startTime || !endTime) return 0;
     const [sh, sm] = startTime.split(":").map(Number);
     const [eh, em] = endTime.split(":").map(Number);
+    if ([sh, sm, eh, em].some((value) => Number.isNaN(value))) return 0;
     const start = sh * 60 + sm;
     const end = eh * 60 + em;
     const rest = parseInt(breakTime || "0", 10) || 0;
@@ -274,10 +436,11 @@ export default function RecordForm() {
   }, [total, workMinutes]);
 
   const workText = useMemo(() => {
+    if (!startTime || !endTime || workMinutes === 0) return "-";
     const h = Math.floor(workMinutes / 60);
     const m = workMinutes % 60;
     return `${h}:${String(m).padStart(2, "0")}`;
-  }, [workMinutes]);
+  }, [endTime, startTime, workMinutes]);
 
   const dailyGoalAmount = useMemo(() => {
     if (typeof window === "undefined") return 0;
@@ -292,6 +455,12 @@ export default function RecordForm() {
         ? `目標達成！ +${formatCurrency(goalDiff)}`
         : `あと ${formatCurrency(Math.abs(goalDiff))}`
       : "";
+  const showRecordGuide = !recordGuideDismissed && !isEditing && recordCount < 3;
+
+  const dismissRecordGuide = () => {
+    writeStorageBoolean(RECORD_GUIDE_DISMISSED_KEY, true);
+    setRecordGuideDismissed(true);
+  };
 
   const handleSave = () => {
     if (saving) return;
@@ -299,6 +468,7 @@ export default function RecordForm() {
     const now = new Date().toISOString();
     const records = loadRecords();
     const existing = records.find((item) => item.date === date);
+    const isFirstRecordSave = records.length === 0 && !existing;
     const currentProfile = loadProfile();
     const activeUser = createUserFromInput({
       name: profileName,
@@ -308,6 +478,7 @@ export default function RecordForm() {
     setActiveUser(activeUser);
     const nextProfile: Profile = {
       ...currentProfile,
+      displayName: activeUser.name,
       name: activeUser.name,
       prefecture: activeUser.prefecture,
       region: activeUser.region,
@@ -362,6 +533,55 @@ export default function RecordForm() {
     );
 
     saveRecords(next);
+    if (startTime && endTime) {
+      saveLastWorkTime({
+        startTime,
+        endTime,
+        breakMinutes: parseInt(breakTime || "0", 10) || 0,
+      });
+    }
+    addNewsForRecord(newRecord, next);
+    addTopUpdateNewsForRecord(newRecord, next);
+    addBreakingRecordNews(newRecord);
+    saveHighlightUpdate({
+      recordDate: newRecord.date,
+      fields: buildHighlightFields(newRecord, next),
+      createdAt: now,
+    });
+
+    const plan = getMonthlyGoal(monthKeyFromDate(newRecord.date));
+    const week = getWeekRange(newRecord.date);
+    const weeklyTarget =
+      plan?.dailyGoals
+        .filter((goal) => goal.date >= week.start && goal.date <= week.end)
+        .reduce((sum, goal) => sum + goal.targetAmount, 0) ?? 0;
+    const weeklyActual = sumRecords(
+      next.filter((record) => record.date >= week.start && record.date <= week.end)
+    );
+    const monthlyTarget = plan?.dailyGoals.reduce((sum, goal) => sum + goal.targetAmount, 0) ?? 0;
+    const monthlyActual = sumRecords(
+      next.filter((record) => record.date.startsWith(monthKeyFromDate(newRecord.date)))
+    );
+
+    const nextCongrats: CongratsState =
+      monthlyTarget > 0 && monthlyActual >= monthlyTarget
+        ? {
+        type: "monthly",
+        message: "月間目標達成！！本当にすごい！！！",
+          }
+        : weeklyTarget > 0 && weeklyActual >= weeklyTarget
+        ? {
+        type: "weekly",
+        message: "週間目標達成！すごい！",
+          }
+        : dailyGoalAmount > 0 && goalDiff >= 0
+        ? {
+        type: "daily",
+        message: "ナイス達成！",
+          }
+        : null;
+
+    if (nextCongrats) setCongrats(nextCongrats);
 
     if (dailyGoalAmount > 0) {
       setToastMessage(
@@ -372,13 +592,19 @@ export default function RecordForm() {
     } else {
       setToastMessage(isEditing ? "更新しました" : "保存しました");
     }
+    setAfterSaveMessage(
+      isFirstRecordSave
+        ? "記録しました！マイページで確認できます"
+        : "記録しました。マイページで確認できます"
+    );
+    setShowAfterSaveActions(true);
     setSaving(true);
     setShowToast(true);
 
     setTimeout(() => {
       router.push("/");
       router.refresh();
-    }, 900);
+    }, nextCongrats ? 2600 : isFirstRecordSave ? 3200 : 1800);
   };
 
   if (!loaded) return null;
@@ -390,6 +616,13 @@ export default function RecordForm() {
         message={toastMessage || (isEditing ? "更新しました" : "保存しました")}
         show={showToast}
       />
+      {congrats && (
+        <CongratsOverlay
+          type={congrats.type}
+          message={congrats.message}
+          onClose={() => setCongrats(null)}
+        />
+      )}
 
       <div className="sticky top-16 z-20 border-b bg-white px-4 pb-3 pt-3">
         <div className="grid grid-cols-[1fr_1fr_1fr] gap-2">
@@ -473,7 +706,19 @@ export default function RecordForm() {
         </div>
       </div>
 
-      <div className="px-4 py-4 pb-32">
+      <div className="px-4 py-4 pb-[calc(8rem+env(safe-area-inset-bottom))]">
+        {showRecordGuide && (
+          <div className="mb-4">
+            <OnboardingCard
+              title="金額だけでもOK"
+              body="件数や稼働時間を入れると、時給や1件単価も見られます"
+              onSecondary={dismissRecordGuide}
+              secondaryLabel="閉じる"
+              tone="blue"
+            />
+          </div>
+        )}
+
         <div className="rounded-2xl bg-white p-4 shadow-sm">
           <div className="text-base font-bold text-gray-900">稼働 {workText}</div>
 
@@ -482,31 +727,40 @@ export default function RecordForm() {
             <input
               type="time"
               value={startTime}
-              onChange={(e) => setStartTime(e.target.value)}
-              className="rounded-md border px-2 py-1"
+              step={300}
+              onChange={(e) => setStartTime(roundTimeToFiveMinutes(e.target.value))}
+              placeholder="--:--"
+              className={`rounded-md border px-2 py-1 ${startTime ? "" : "text-gray-400"}`}
             />
 
             <span>終了</span>
             <input
               type="time"
               value={endTime}
-              onChange={(e) => setEndTime(e.target.value)}
-              className="rounded-md border px-2 py-1"
+              step={300}
+              onChange={(e) => setEndTime(roundTimeToFiveMinutes(e.target.value))}
+              placeholder="--:--"
+              className={`rounded-md border px-2 py-1 ${endTime ? "" : "text-gray-400"}`}
             />
 
             <span>休憩</span>
             <select
               value={breakTime}
               onChange={(e) => setBreakTime(e.target.value)}
-              className="rounded-md border px-2 py-1"
+              className={`rounded-md border px-2 py-1 ${breakTime ? "" : "text-gray-400"}`}
             >
-              <option value="0">0:00</option>
-              <option value="15">0:15</option>
-              <option value="30">0:30</option>
-              <option value="45">0:45</option>
-              <option value="60">1:00</option>
-              <option value="75">1:15</option>
-              <option value="90">1:30</option>
+              <option value="">0:00</option>
+              {breakTime &&
+                !BREAK_MINUTE_OPTIONS.includes(parseInt(breakTime, 10)) && (
+                  <option value={breakTime}>
+                    {formatBreakMinutes(parseInt(breakTime, 10))}
+                  </option>
+                )}
+              {BREAK_MINUTE_OPTIONS.map((minutes) => (
+                <option key={minutes} value={String(minutes)}>
+                  {formatBreakMinutes(minutes)}
+                </option>
+              ))}
             </select>
           </div>
 
@@ -523,10 +777,10 @@ export default function RecordForm() {
             <input
               type="text"
               value={comment}
-              maxLength={15}
-              onChange={(e) => setComment(e.target.value.slice(0, 15))}
+              maxLength={25}
+              onChange={(e) => setComment(e.target.value.slice(0, 25))}
               className="mt-2 h-11 w-full rounded-xl border border-gray-200 bg-white px-3 text-sm outline-none focus:border-green-500 focus:ring-2 focus:ring-green-100"
-              placeholder="例: 雨で単価高め"
+              placeholder="最大25文字"
             />
           </label>
 
@@ -540,6 +794,26 @@ export default function RecordForm() {
             ランキングに参加する
           </label>
         </div>
+
+        {showAfterSaveActions && (
+          <section className="mt-4 rounded-2xl border border-green-100 bg-white p-4 shadow-sm">
+            <div className="text-sm font-black text-gray-900">{afterSaveMessage}</div>
+            <div className="mt-3 grid grid-cols-2 gap-2">
+              <Link
+                href="/ranking"
+                className="rounded-xl bg-green-600 px-3 py-2 text-center text-xs font-black text-white"
+              >
+                ランキングを見る
+              </Link>
+              <Link
+                href="/"
+                className="rounded-xl border border-green-200 px-3 py-2 text-center text-xs font-black text-green-700"
+              >
+                目標を作る
+              </Link>
+            </div>
+          </section>
+        )}
       </div>
 
       <SaveButton onClick={handleSave} />

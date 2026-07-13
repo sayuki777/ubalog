@@ -4,8 +4,23 @@ import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import AppHeader from "@/components/AppHeader";
 import BottomMenu from "@/components/BottomMenu";
+import FirstStepGuide from "@/components/FirstStepGuide";
 import PersonalDashboard from "@/components/PersonalDashboard";
+import PersonalNewsCard from "@/components/PersonalNewsCard";
+import RealDeviceTestPanel from "@/components/RealDeviceTestPanel";
 import TestOperationPanel from "@/components/TestOperationPanel";
+import {
+  getHighlightUpdate,
+  hasHighlight,
+  type HighlightUpdate,
+} from "@/lib/highlights";
+import { getMonthlyGoal } from "@/lib/goals";
+import {
+  ONBOARDING_DISMISSED_KEY,
+  PROFILE_GUIDE_DISMISSED_KEY,
+  readStorageBoolean,
+  writeStorageBoolean,
+} from "@/lib/onboarding";
 import {
   ensureActiveUserFromProfile,
   getActiveUser,
@@ -13,6 +28,7 @@ import {
 } from "@/lib/users";
 
 type Profile = {
+  displayName?: string;
   name?: string;
   nickname: string;
   area: string;
@@ -22,10 +38,13 @@ type Profile = {
 
 type StoredRecord = {
   date: string;
+  displayName?: string;
   name?: string;
+  rankingName?: string;
+  nickname?: string;
   total: number;
-  ranking: boolean;
-  hourly: number;
+  ranking?: boolean;
+  hourly?: number;
 };
 
 const RECORDS_STORAGE_KEY = "ubalog-records";
@@ -93,11 +112,27 @@ function yesterdayIsoDate() {
   return `${y}-${m}-${d}`;
 }
 
-function currentMonthPrefix() {
-  const now = new Date();
-  const y = now.getFullYear();
-  const m = String(now.getMonth() + 1).padStart(2, "0");
-  return `${y}-${m}`;
+function toIsoDate(date: Date) {
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, "0");
+  const d = String(date.getDate()).padStart(2, "0");
+  return `${y}-${m}-${d}`;
+}
+
+function startOfWeek(date: Date) {
+  const day = date.getDay();
+  const diff = day === 0 ? -6 : 1 - day;
+  const start = new Date(date);
+  start.setDate(date.getDate() + diff);
+  return start;
+}
+
+function weekRange(diffWeeks: number) {
+  const base = startOfWeek(new Date());
+  base.setDate(base.getDate() + diffWeeks * 7);
+  const end = new Date(base);
+  end.setDate(base.getDate() + 6);
+  return { start: toIsoDate(base), end: toIsoDate(end) };
 }
 
 function loadProfile(): Profile | null {
@@ -118,12 +153,32 @@ function displayNameFromProfile(profile: Profile | null) {
 export default function HomeDashboard() {
   const [records, setRecords] = useState<StoredRecord[]>([]);
   const [displayName, setDisplayName] = useState("匿名配達員");
+  const [highlight, setHighlight] = useState<HighlightUpdate | null>(null);
+  const [weeklyGoal, setWeeklyGoal] = useState(0);
+  const [todayGoal, setTodayGoal] = useState(0);
+  const [hasDisplayName, setHasDisplayName] = useState(true);
+  const [mainService, setMainService] = useState("");
+  const [onboardingDismissed, setOnboardingDismissed] = useState(false);
+  const [profileGuideDismissed, setProfileGuideDismissed] = useState(false);
 
   useEffect(() => {
     const load = () => {
       const profile = loadProfile();
       ensureActiveUserFromProfile(profile);
       setDisplayName(displayNameFromProfile(profile));
+      setHasDisplayName(Boolean(profile?.displayName?.trim() || profile?.name?.trim()));
+      setMainService(profile?.mainService?.trim() ?? "");
+      setOnboardingDismissed(readStorageBoolean(ONBOARDING_DISMISSED_KEY));
+      setProfileGuideDismissed(readStorageBoolean(PROFILE_GUIDE_DISMISSED_KEY));
+      setHighlight(getHighlightUpdate());
+      const plan = getMonthlyGoal(todayIsoDate().slice(0, 7));
+      const thisWeekRange = weekRange(0);
+      setWeeklyGoal(
+        plan?.dailyGoals
+          .filter((goal) => goal.date >= thisWeekRange.start && goal.date <= thisWeekRange.end)
+          .reduce((sum, goal) => sum + goal.targetAmount, 0) ?? 0
+      );
+      setTodayGoal(plan?.dailyGoals.find((goal) => goal.date === todayIsoDate())?.targetAmount ?? 0);
 
       const raw = localStorage.getItem(RECORDS_STORAGE_KEY);
       if (!raw) {
@@ -139,61 +194,117 @@ export default function HomeDashboard() {
 
     const timer = window.setTimeout(load, 0);
     window.addEventListener("focus", load);
+    window.addEventListener("ubalog-profile-updated", load);
+    window.addEventListener("ubalog-highlight-updated", load);
+    window.addEventListener("ubalog-goals-updated", load);
 
     return () => {
       window.clearTimeout(timer);
       window.removeEventListener("focus", load);
+      window.removeEventListener("ubalog-profile-updated", load);
+      window.removeEventListener("ubalog-highlight-updated", load);
+      window.removeEventListener("ubalog-goals-updated", load);
     };
   }, []);
 
   const today = todayIsoDate();
   const yesterday = yesterdayIsoDate();
-  const monthPrefix = currentMonthPrefix();
+  const thisWeek = weekRange(0);
+  const lastWeek = weekRange(-1);
 
   const todayTotal = useMemo(() => {
     const record = records.find((item) => item.date === today);
     return record?.total ?? 0;
   }, [records, today]);
 
-  const monthTotal = useMemo(() => {
+  const thisWeekTotal = useMemo(() => {
     return records
-      .filter((item) => item.date.startsWith(monthPrefix))
+      .filter((item) => item.date >= thisWeek.start && item.date <= thisWeek.end)
       .reduce((sum, item) => sum + item.total, 0);
-  }, [records, monthPrefix]);
+  }, [records, thisWeek.end, thisWeek.start]);
+
+  const lastWeekTotal = useMemo(() => {
+    return records
+      .filter((item) => item.date >= lastWeek.start && item.date <= lastWeek.end)
+      .reduce((sum, item) => sum + item.total, 0);
+  }, [lastWeek.end, lastWeek.start, records]);
+
+  const yesterdayTotal = useMemo(() => {
+    const record = records.find((item) => item.date === yesterday);
+    return record?.total ?? 0;
+  }, [records, yesterday]);
 
   const yesterdayTop3 = useMemo(() => {
     return records
-      .filter((item) => item.date === yesterday && item.ranking)
+      .filter((item) => item.date === yesterday && item.ranking !== false && item.total > 0)
       .sort((a, b) => {
         if (b.total !== a.total) return b.total - a.total;
-        return b.hourly - a.hourly;
+        return (b.hourly ?? 0) - (a.hourly ?? 0);
       })
       .slice(0, 3)
       .map((item, index) => ({
         rank: index + 1,
-        name: item.name?.trim() || displayName,
+        name:
+          item.displayName?.trim() ||
+          item.name?.trim() ||
+          item.rankingName?.trim() ||
+          item.nickname?.trim() ||
+          displayName,
         amount: item.total,
       }));
   }, [displayName, records, yesterday]);
+
+  const hasTodayHighlight =
+    highlight?.recordDate === today && hasHighlight("today", highlight);
+  const showRecruitGuide = records.length === 0 || !mainService;
+
+  const dismissOnboarding = () => {
+    writeStorageBoolean(ONBOARDING_DISMISSED_KEY, true);
+    setOnboardingDismissed(true);
+  };
+
+  const dismissProfileGuide = () => {
+    writeStorageBoolean(PROFILE_GUIDE_DISMISSED_KEY, true);
+    setProfileGuideDismissed(true);
+  };
 
   return (
     <main className="mx-auto min-h-screen w-full max-w-[430px] bg-gray-50 pb-24">
       <AppHeader />
 
-      <div className="px-4 pt-4">
+      <div className="px-4 pb-[calc(8rem+env(safe-area-inset-bottom))] pt-4">
         <section className="rounded-2xl bg-white p-4 shadow-sm">
-          <div className="flex items-center justify-between">
-            <div className="text-base font-bold text-gray-900">今日のサマリー</div>
-            <div className="rounded-full bg-green-50 px-3 py-1 text-xs font-bold text-green-700">
-              {today.replaceAll("-", "/")}
-            </div>
-          </div>
-
-          <div className="mt-4 grid grid-cols-2 gap-3">
-            <StatCard title="今日の売上" value={`￥${todayTotal.toLocaleString()}`} />
-            <StatCard title="今月の売上" value={`￥${monthTotal.toLocaleString()}`} />
+          <div className="grid grid-cols-2 gap-3">
+            <SummaryCard
+              title="先週"
+              value={lastWeekTotal}
+              subTitle="今週"
+              subValue={thisWeekTotal}
+              goal={weeklyGoal}
+              highlight={hasHighlight("lastWeek", highlight)}
+            />
+            <SummaryCard
+              title="前日"
+              value={yesterdayTotal}
+              subTitle="今日"
+              subValue={todayTotal}
+              goal={todayGoal}
+              highlight={hasHighlight("yesterday", highlight)}
+              subHighlight={hasTodayHighlight}
+            />
           </div>
         </section>
+
+        <FirstStepGuide
+          recordsCount={records.length}
+          hasDisplayName={hasDisplayName}
+          onboardingDismissed={onboardingDismissed}
+          profileGuideDismissed={profileGuideDismissed}
+          onDismissOnboarding={dismissOnboarding}
+          onDismissProfileGuide={dismissProfileGuide}
+        />
+
+        <PersonalNewsCard />
 
         <PersonalDashboard />
 
@@ -261,7 +372,22 @@ export default function HomeDashboard() {
           ))}
         </section>
 
+        {showRecruitGuide && (
+          <Link
+            href="/recruit"
+            className="mt-4 block rounded-2xl border border-green-100 bg-white p-4 shadow-sm active:bg-green-50"
+          >
+            <div className="text-sm font-black text-gray-900">
+              配達を始めたい人はこちら
+            </div>
+            <div className="mt-1 text-xs font-bold text-green-700">
+              配達員募集を見る
+            </div>
+          </Link>
+        )}
+
         <TestOperationPanel />
+        <RealDeviceTestPanel />
       </div>
 
       <BottomMenu />
@@ -269,17 +395,51 @@ export default function HomeDashboard() {
   );
 }
 
-function StatCard({
+function NewBadge() {
+  return (
+    <span className="rounded-full bg-pink-100 px-1.5 py-0.5 text-[9px] font-black text-pink-600">
+      NEW! ✨
+    </span>
+  );
+}
+
+function SummaryCard({
   title,
   value,
+  subTitle,
+  subValue,
+  goal,
+  highlight,
+  subHighlight,
 }: {
   title: string;
-  value: string;
+  value: number;
+  subTitle: string;
+  subValue: number;
+  goal: number;
+  highlight: boolean;
+  subHighlight?: boolean;
 }) {
   return (
-    <div className="rounded-xl bg-gray-50 px-4 py-4">
-      <div className="text-xs font-semibold text-gray-500">{title}</div>
-      <div className="mt-2 text-2xl font-bold text-gray-900">{value}</div>
+    <div className="rounded-2xl bg-gray-50 px-3 py-3">
+      <div className="flex items-center justify-between gap-2">
+        <div className="text-xs font-bold text-gray-500">{title}</div>
+        {highlight && <NewBadge />}
+      </div>
+      <div className="mt-1 text-2xl font-black text-gray-900">￥{value.toLocaleString()}</div>
+      <div className="mt-2 flex items-center justify-between gap-2 text-[11px] font-bold text-gray-500">
+        <span>{subTitle}</span>
+        <span className="flex min-w-0 items-center justify-end gap-1">
+          <span>￥{subValue.toLocaleString()}</span>
+          {subHighlight && <NewBadge />}
+        </span>
+      </div>
+      {goal > 0 && (
+        <div className="mt-1 flex items-center justify-between text-[10px] font-bold text-green-700">
+          <span>目標</span>
+          <span>￥{goal.toLocaleString()}</span>
+        </div>
+      )}
     </div>
   );
 }

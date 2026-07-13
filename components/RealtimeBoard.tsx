@@ -11,6 +11,7 @@ import {
   type RocketNowOcrProgress,
 } from "@/lib/rocketNowOcr";
 import { type RocketNowScanResult } from "@/lib/rocketNowScan";
+import { addBreakingRealtimeNews } from "@/lib/news";
 
 const RealtimeMap = dynamic(() => import("@/components/RealtimeMap"), {
   ssr: false,
@@ -34,6 +35,7 @@ type InputSource = "manual" | "scan";
 type ServiceName = (typeof services)[number];
 
 type Profile = {
+  displayName?: string;
   name?: string;
   nickname?: string;
   area?: string;
@@ -138,6 +140,9 @@ function loadProfile(): Profile | null {
 }
 
 function displayNameFromProfile(profile: Profile | null) {
+  const displayName = profile?.displayName?.trim();
+  if (displayName) return displayName;
+
   const name = profile?.name?.trim();
   if (name) return name;
 
@@ -408,6 +413,11 @@ export default function RealtimeBoard() {
   const canSync = amountNumber >= 1 && distanceNumber > 0 && Boolean(service);
   const hasPickedMapLocation = positionMode !== "map" || Boolean(pickedLocation);
   const canSubmitOffer = canSync && hasPickedMapLocation;
+  const sheetMissingMessage = !service
+    ? "サービスを選択してください"
+    : amountNumber < 1 || distanceNumber <= 0
+    ? "報酬と距離を入力してください"
+    : "";
   const syncMissingMessage = !service
     ? "サービスを選択してください"
     : amountNumber < 1
@@ -564,6 +574,20 @@ export default function RealtimeBoard() {
       setScanLoading(false);
     }
   };
+
+  const handleStartMapSync = () => {
+    if (!canSync) return;
+
+    setPositionMode("map");
+    setShareOpen(false);
+    setShareInputOpen(true);
+    showMessage(
+      pickedLocation
+        ? "共有位置を指定しました"
+        : "地図をタップして共有位置を指定してください"
+    );
+  };
+
   const handleSubmit = async () => {
     if (!canSync) return;
     if (positionMode === "map" && !pickedLocation) {
@@ -609,6 +633,11 @@ export default function RealtimeBoard() {
       a.createdAt < b.createdAt ? 1 : -1
     );
     saveOffers(next);
+    addBreakingRealtimeNews({
+      name: newOffer.name,
+      amount: newOffer.amount,
+      service: newOffer.service,
+    });
     if (shouldSaveRocketNowFeedback) {
       saveRocketNowScanFeedback({
         id: `${now}-${Math.random().toString(36).slice(2)}`,
@@ -653,7 +682,7 @@ export default function RealtimeBoard() {
       <AppHeader title="リアルタイム共有" />
       <Toast message={toastMessage} show={showToast} />
 
-      <section className="relative h-[calc(100dvh-8rem)] overflow-hidden bg-green-50 touch-none">
+      <section className="relative h-[calc(100dvh-8rem)] overflow-hidden bg-green-50">
         <RealtimeMap
           center={mapCenter}
           offers={locatedOffers}
@@ -667,8 +696,9 @@ export default function RealtimeBoard() {
               lng: roundCoordinate(point.lng),
             };
             setPickedLocation(nextLocation);
+            setPositionMode("map");
             setMapCenter([nextLocation.lat, nextLocation.lng]);
-            showMessage("地図上で位置指定済み");
+            showMessage("共有位置を指定しました");
           }}
         />
 
@@ -712,6 +742,8 @@ export default function RealtimeBoard() {
               onSubmit={() => void handleSubmit()}
               onEdit={() => setShareOpen(true)}
               variant="map"
+              service={service}
+              actionLabel="共有する"
             />
           </div>
         )}
@@ -774,8 +806,9 @@ export default function RealtimeBoard() {
       {listOpen && (
         <BottomSheet title="最近の共有" onClose={() => setListOpen(false)}>
           {filteredOffers.length === 0 ? (
-            <div className="rounded-2xl bg-gray-50 px-4 py-8 text-center text-sm text-gray-500">
-              条件に合う共有はありません
+            <div className="rounded-2xl bg-gray-50 px-4 py-8 text-center text-sm font-bold text-gray-500">
+              <div>まだ共有はありません</div>
+              <div className="mt-1 text-xs">良い案件を見つけたら共有してみましょう</div>
             </div>
           ) : (
             <div className="space-y-3">
@@ -1031,10 +1064,12 @@ export default function RealtimeBoard() {
                 unitPrice={unitPrice}
                 rank={rank}
                 shopName={shopName}
-                canSubmit={canSubmitOffer}
-                missingMessage={syncMissingMessage}
-                onSubmit={() => void handleSubmit()}
+                canSubmit={canSync}
+                missingMessage={sheetMissingMessage}
+                onSubmit={handleStartMapSync}
                 variant="sheet"
+                service={service}
+                actionLabel="地図に同期"
               />
               </div>
             )}
@@ -1057,6 +1092,8 @@ function ShareSyncFooter({
   onSubmit,
   onEdit,
   variant,
+  service,
+  actionLabel,
 }: {
   amountNumber: number;
   distanceNumber: number;
@@ -1068,6 +1105,8 @@ function ShareSyncFooter({
   onSubmit: () => void;
   onEdit?: () => void;
   variant: "sheet" | "map";
+  service: ServiceName;
+  actionLabel: string;
 }) {
   const trimmedShopName = shopName.trim();
   const hasPreview = amountNumber >= 1 && distanceNumber > 0;
@@ -1083,6 +1122,9 @@ function ShareSyncFooter({
           <>
             <div className="flex items-start justify-between gap-3">
               <div className="min-w-0">
+                <div className="mb-0.5 text-xs font-black text-green-700">
+                  {service}
+                </div>
                 <div className="text-lg font-black text-gray-900">
                   ￥{amountNumber.toLocaleString()} / {distanceNumber.toLocaleString()}km
                 </div>
@@ -1120,7 +1162,7 @@ function ShareSyncFooter({
           disabled={!canSubmit}
           className="h-12 rounded-2xl bg-green-600 text-base font-bold text-white shadow-sm active:scale-[0.99] disabled:bg-gray-300"
         >
-          地図に同期
+          {actionLabel}
         </button>
       </div>
       {!canSubmit && missingMessage && (
@@ -1174,7 +1216,7 @@ function OfferCard({
   const trimmedComment = offer.comment.trim();
 
   return (
-    <article className="rounded-2xl bg-white p-4 shadow-sm ring-1 ring-gray-100">
+    <article className="rounded-2xl bg-white p-3 shadow-sm ring-1 ring-gray-100">
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
           <div className="truncate text-base font-bold text-gray-900">{offerName(offer)}</div>
@@ -1187,17 +1229,17 @@ function OfferCard({
         </div>
       </div>
 
-      <div className="mt-4 rounded-2xl border border-green-100 bg-green-50 p-4">
+      <div className="mt-3 rounded-2xl border border-green-100 bg-green-50 p-3">
         <div className="flex items-end justify-between gap-3">
           <div>
             <div className="text-xs font-bold text-green-700">報酬</div>
-            <div className="mt-1 text-3xl font-black text-gray-900">
+            <div className="mt-1 text-2xl font-black text-gray-900">
               ￥{offer.amount.toLocaleString()}
             </div>
           </div>
           <div className="text-right">
             <div className="text-xs font-bold text-green-700">距離単価</div>
-            <div className="mt-1 text-xl font-black text-green-700">
+            <div className="mt-1 text-lg font-black text-green-700">
               ￥{offer.unitPrice.toLocaleString()}/km
             </div>
           </div>
@@ -1218,13 +1260,13 @@ function OfferCard({
         {rankLabel(offer.rank)}
       </div>
 
-      <div className="mt-3 grid grid-cols-2 gap-2 text-sm">
-        <DetailItem label="サービス" value={normalizeService(offer.service)} />
-        <DetailItem label="距離" value={`${offer.distanceKm.toLocaleString()}km`} />
-        {trimmedArea && <DetailItem label="エリア" value={trimmedArea} />}
-        {trimmedShopName && <DetailItem label="店舗名" value={trimmedShopName} />}
-        {trimmedDropoffArea && <DetailItem label="配達先方面" value={trimmedDropoffArea} />}
-      </div>
+      {(trimmedArea || trimmedShopName || trimmedDropoffArea) && (
+        <div className="mt-3 grid grid-cols-2 gap-2 text-sm">
+          {trimmedArea && <DetailItem label="エリア" value={trimmedArea} />}
+          {trimmedShopName && <DetailItem label="店舗名" value={trimmedShopName} />}
+          {trimmedDropoffArea && <DetailItem label="配達先方面" value={trimmedDropoffArea} />}
+        </div>
+      )}
 
       {trimmedComment && (
         <div className="mt-3 rounded-xl bg-gray-50 px-3 py-3 text-sm text-gray-700">

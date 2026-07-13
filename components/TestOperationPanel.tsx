@@ -9,11 +9,14 @@ const NOTES_STORAGE_KEY = "ubalog-test-notes";
 const checklistItems = [
   "記録入力",
   "目標確認",
-  "ロケナウOCR",
+  "ニュース確認",
+  "ランキング確認",
   "リアルタイム共有",
   "地図に同期",
-  "ランキング確認",
-  "バックアップ",
+  "ロケナウOCR",
+  "プロフィール確認",
+  "バックアップ作成",
+  "スマホ表示確認",
 ];
 
 function loadCheckedItems() {
@@ -31,6 +34,8 @@ function loadCheckedItems() {
 export default function TestOperationPanel() {
   const [checkedItems, setCheckedItems] = useState<string[]>([]);
   const [notes, setNotes] = useState("");
+  const [copyMessage, setCopyMessage] = useState("");
+  const [fallbackText, setFallbackText] = useState("");
   const [loaded, setLoaded] = useState(false);
 
   useEffect(() => {
@@ -59,6 +64,35 @@ export default function TestOperationPanel() {
     localStorage.setItem(NOTES_STORAGE_KEY, next);
   };
 
+  const buildReportText = () => {
+    const checks = checklistItems
+      .map((item) => `- ${item}: ${checkedItems.includes(item) ? "OK" : "未確認"}`)
+      .join("\n");
+
+    return `ウバログ テスト報告\nチェック:\n${checks}\n\nメモ:\n${notes.trim() || "なし"}`;
+  };
+
+  const handleCopyReport = async () => {
+    const text = buildReportText();
+    setFallbackText("");
+
+    try {
+      if (!navigator.clipboard) {
+        setFallbackText(text);
+        setCopyMessage("コピー用の文を表示しました");
+        return;
+      }
+
+      await navigator.clipboard.writeText(text);
+      setCopyMessage("コピーしました");
+    } catch {
+      setFallbackText(text);
+      setCopyMessage("コピー用の文を表示しました");
+    }
+  };
+
+  const allChecked = checkedItems.length === checklistItems.length;
+
   if (!loaded) return null;
 
   return (
@@ -67,7 +101,7 @@ export default function TestOperationPanel() {
         <div>
           <h2 className="text-base font-bold text-gray-900">テスト運用チェック</h2>
           <p className="mt-1 text-xs font-bold text-gray-500">
-            配達中に確認した項目を残せます
+            公開前に確認した項目を残せます
           </p>
         </div>
         <Link
@@ -78,11 +112,17 @@ export default function TestOperationPanel() {
         </Link>
       </div>
 
-      <div className="mt-4 grid grid-cols-2 gap-2">
+      {allChecked && (
+        <div className="mt-3 rounded-xl bg-green-50 px-3 py-2 text-xs font-black text-green-700">
+          テスト完了！
+        </div>
+      )}
+
+      <div className="mt-3 grid grid-cols-2 gap-2">
         {checklistItems.map((item) => (
           <label
             key={item}
-            className="flex min-h-11 items-center gap-2 rounded-xl bg-gray-50 px-3 py-2 text-xs font-bold text-gray-700"
+            className="flex min-h-10 items-center gap-2 rounded-xl bg-gray-50 px-3 py-2 text-xs font-bold text-gray-700"
           >
             <input
               type="checkbox"
@@ -101,14 +141,38 @@ export default function TestOperationPanel() {
           value={notes}
           maxLength={300}
           onChange={(event) => handleNotesChange(event.target.value)}
-          className="mt-2 min-h-24 w-full resize-none rounded-xl border border-gray-200 bg-white px-3 py-3 text-sm outline-none focus:border-green-500 focus:ring-2 focus:ring-green-100"
+          className="mt-2 min-h-20 w-full resize-none rounded-xl border border-gray-200 bg-white px-3 py-3 text-sm outline-none focus:border-green-500 focus:ring-2 focus:ring-green-100"
           placeholder="気づいたことをメモ"
         />
       </label>
-      <div className="mt-1 text-right text-[11px] font-bold text-gray-400">
-        {notes.length}/300
+      <div className="mt-1 flex items-center justify-between gap-3">
+        <button
+          type="button"
+          onClick={() => {
+            void handleCopyReport();
+          }}
+          className="rounded-full border border-gray-200 px-3 py-2 text-xs font-bold text-gray-700 active:bg-gray-50"
+        >
+          報告文をコピー
+        </button>
+        <div className="text-right text-[11px] font-bold text-gray-400">
+          {notes.length}/300
+        </div>
       </div>
+
+      {copyMessage && (
+        <div className="mt-3 rounded-xl bg-green-50 px-3 py-2 text-xs font-bold text-green-700">
+          {copyMessage}
+        </div>
+      )}
+
+      {fallbackText && (
+        <textarea
+          value={fallbackText}
+          readOnly
+          className="mt-2 max-h-32 w-full resize-none rounded-xl border border-gray-200 bg-gray-50 px-3 py-2 text-xs text-gray-700 outline-none"
+        />
+      )}
     </section>
   );
 }
-

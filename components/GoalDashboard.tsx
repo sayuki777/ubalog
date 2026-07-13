@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import MoodPicker from "@/components/MoodPicker";
 import { isHolidayOrWeekend } from "@/lib/japaneseHolidays";
 import {
   createMonthlyGoalPlan,
@@ -10,6 +11,7 @@ import {
   type DailyGoal,
   type MonthlyGoalPlan,
 } from "@/lib/goals";
+import { getMood, saveMood } from "@/lib/mood";
 
 type ServiceKey = "uber" | "demae" | "menu" | "rocket" | "other";
 
@@ -28,6 +30,7 @@ type Props = {
   records: StoredRecord[];
   currentMonth: Date;
   onChangeMonth: (diff: number) => void;
+  displayName?: string;
 };
 
 function toIsoDate(date: Date) {
@@ -43,10 +46,6 @@ function todayIsoDate() {
 
 function monthKey(date: Date) {
   return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`;
-}
-
-function previousMonthKey(date: Date) {
-  return monthKey(new Date(date.getFullYear(), date.getMonth() - 1, 1));
 }
 
 function formatMonthLabel(date: Date) {
@@ -108,6 +107,11 @@ function percent(actual: number, target: number) {
   return `${Math.floor((actual / target) * 100)}%`;
 }
 
+function percentNumber(actual: number, target: number) {
+  if (target <= 0) return null;
+  return Math.floor((actual / target) * 100);
+}
+
 function sum(records: StoredRecord[]) {
   return records.reduce((total, record) => total + record.total, 0);
 }
@@ -123,28 +127,40 @@ function weekRange(base: Date, offsetWeeks: number) {
   return { start: toIsoDate(start), end: toIsoDate(end) };
 }
 
-function compareText(current: number, previous: number) {
-  if (previous <= 0) return "-";
-  const diff = current - previous;
-  const rate = Math.round((diff / previous) * 100);
-  const sign = diff >= 0 ? "+" : "";
-  return `${sign}${rate}%（${sign}${formatCurrency(diff)}）`;
+function datesBetween(startIso: string, endIso: string) {
+  const [startYear, startMonth, startDay] = startIso.split("-").map(Number);
+  const [endYear, endMonth, endDay] = endIso.split("-").map(Number);
+  const cursor = new Date(startYear, startMonth - 1, startDay);
+  const end = new Date(endYear, endMonth - 1, endDay);
+  const dates: string[] = [];
+
+  while (cursor <= end) {
+    dates.push(toIsoDate(cursor));
+    cursor.setDate(cursor.getDate() + 1);
+  }
+
+  return dates;
 }
 
-function daysLeftInMonth(month: string) {
-  const today = todayIsoDate();
-  const [year, monthNumber] = month.split("-").map(Number);
-  const lastDay = new Date(year, monthNumber, 0).getDate();
-  const days = Array.from({ length: lastDay }, (_, index) =>
-    toIsoDate(new Date(year, monthNumber - 1, index + 1))
-  );
-  return days.filter((date) => date >= today).length;
+function compactAmount(amount: number) {
+  if (amount <= 0) return "";
+  if (amount >= 100000) return "10万+";
+  return amount.toLocaleString();
+}
+
+function moodText(progressRate: number | null, hasTarget: boolean) {
+  if (!hasTarget) return "ぼちぼち";
+  if (progressRate !== null && progressRate >= 110) return "イケイケ🔥";
+  if (progressRate !== null && progressRate >= 90) return "順調です";
+  if (progressRate !== null && progressRate >= 60) return "コツコツ";
+  return "気分転換☕";
 }
 
 export default function GoalDashboard({
   records,
   currentMonth,
   onChangeMonth,
+  displayName,
 }: Props) {
   const month = monthKey(currentMonth);
   const [plan, setPlan] = useState<MonthlyGoalPlan | null>(null);
@@ -154,6 +170,8 @@ export default function GoalDashboard({
   const [dailyTarget, setDailyTarget] = useState("");
   const [memo, setMemo] = useState("");
   const [savedMessage, setSavedMessage] = useState("");
+  const [manualMood, setManualMood] = useState("");
+  const [moodPickerOpen, setMoodPickerOpen] = useState(false);
 
   useEffect(() => {
     const timer = window.setTimeout(() => {
@@ -186,31 +204,64 @@ export default function GoalDashboard({
     return () => window.clearTimeout(timer);
   }, [selectedGoal, selectedDate]);
 
+  useEffect(() => {
+    const loadMood = () => {
+      setManualMood(getMood(todayIsoDate())?.mood ?? "");
+    };
+
+    const timer = window.setTimeout(loadMood, 0);
+    window.addEventListener("ubalog-mood-updated", loadMood);
+
+    return () => {
+      window.clearTimeout(timer);
+      window.removeEventListener("ubalog-mood-updated", loadMood);
+    };
+  }, []);
+
   const totalTarget =
     plan?.dailyGoals.reduce((total, goal) => total + goal.targetAmount, 0) ?? 0;
   const actualTotal = sum(monthRecords);
-  const remainingTarget = Math.max(totalTarget - actualTotal, 0);
-  const achievement = percent(actualTotal, totalTarget);
-  const remainingDays = daysLeftInMonth(month);
-  const neededPerDay =
-    remainingTarget > 0 && remainingDays > 0
-      ? Math.ceil(remainingTarget / remainingDays)
-      : 0;
+  const monthAchievement = percentNumber(actualTotal, totalTarget);
 
   const thisWeek = weekRange(new Date(), 0);
-  const previousWeek = weekRange(new Date(), -1);
+  const today = todayIsoDate();
+  const getTargetForDate = (date: string) => {
+    if (date.startsWith(month)) return goalsByDate.get(date)?.targetAmount ?? 0;
+    return (
+      getMonthlyGoal(date.slice(0, 7))?.dailyGoals.find((goal) => goal.date === date)
+        ?.targetAmount ?? 0
+    );
+  };
+  const weekDates = datesBetween(thisWeek.start, thisWeek.end);
+  const weeklyTarget = weekDates.reduce(
+    (total, date) => total + getTargetForDate(date),
+    0
+  );
+  const weeklyTargetUntilToday = weekDates
+    .filter((date) => date <= today)
+    .reduce((total, date) => total + getTargetForDate(date), 0);
   const thisWeekTotal = sum(
     records.filter((record) => record.date >= thisWeek.start && record.date <= thisWeek.end)
   );
-  const previousWeekTotal = sum(
+  const thisWeekTotalUntilToday = sum(
     records.filter(
-      (record) => record.date >= previousWeek.start && record.date <= previousWeek.end
+      (record) =>
+        record.date >= thisWeek.start && record.date <= thisWeek.end && record.date <= today
     )
   );
-  const previousMonthTotal = sum(
-    records.filter((record) => record.date.startsWith(previousMonthKey(currentMonth)))
+  const weeklyAchievement = percentNumber(thisWeekTotal, weeklyTarget);
+  const weeklyProgress = percentNumber(thisWeekTotalUntilToday, weeklyTargetUntilToday);
+  const monthTargetUntilToday =
+    plan?.dailyGoals
+      .filter((goal) => goal.date.startsWith(month) && goal.date <= today)
+      .reduce((total, goal) => total + goal.targetAmount, 0) ?? 0;
+  const monthActualUntilToday = sum(
+    monthRecords.filter((record) => record.date <= today)
   );
-  const today = todayIsoDate();
+  const monthProgress = percentNumber(monthActualUntilToday, monthTargetUntilToday);
+  const moodLabel = displayName?.trim() ? `${displayName.trim()}の気分` : "気分";
+  const currentMood =
+    manualMood || moodText(monthProgress, monthTargetUntilToday > 0 || weeklyTargetUntilToday > 0);
   const todayGoal = month === monthKey(new Date()) ? goalsByDate.get(today) : null;
   const todayActual =
     month === monthKey(new Date()) ? recordsByDate.get(today)?.total ?? 0 : 0;
@@ -233,6 +284,20 @@ export default function GoalDashboard({
     const next = getMonthlyGoal(month);
     setPlan(next);
     setSavedMessage("日別目標を保存しました");
+  };
+
+  const handleDeleteDailyGoal = () => {
+    updateDailyGoal(month, selectedDate, 0, memo);
+    const next = getMonthlyGoal(month);
+    setPlan(next);
+    setDailyTarget("");
+    setSavedMessage("日別目標を削除しました");
+  };
+
+  const handleSelectMood = (mood: string) => {
+    saveMood(todayIsoDate(), mood);
+    setManualMood(mood);
+    setMoodPickerOpen(false);
   };
 
   return (
@@ -261,12 +326,31 @@ export default function GoalDashboard({
         </div>
 
         <div className="grid grid-cols-2 gap-3">
-          <GoalStat title="月間目標" value={formatCurrency(totalTarget)} />
-          <GoalStat title="現在の実績" value={formatCurrency(actualTotal)} />
-          <GoalStat title="残り目標" value={formatCurrency(remainingTarget)} />
-          <GoalStat title="達成率" value={achievement || "-"} />
-          <GoalStat title="残り日数" value={`${remainingDays}日`} />
-          <GoalStat title="1日あたり必要額" value={formatCurrency(neededPerDay)} />
+          <GoalStat title="今週目標" value={formatCurrency(weeklyTarget)} featured />
+          <GoalStat title="現在週実績" value={formatCurrency(thisWeekTotal)} featured />
+          <GoalStat title="週進捗率" value={weeklyProgress === null ? "-" : `${weeklyProgress}%`} />
+          <GoalStat
+            title="週達成率"
+            value={weeklyAchievement === null ? "-" : `${weeklyAchievement}%`}
+            badge={weeklyAchievement !== null && weeklyAchievement >= 100 ? "達成！🎉" : undefined}
+          />
+        </div>
+
+        <div className="mt-3 grid grid-cols-2 gap-2">
+          <GoalStat title="月間目標" value={formatCurrency(totalTarget)} compact />
+          <GoalStat title="現在月実績" value={formatCurrency(actualTotal)} compact />
+          <GoalStat title="月進捗率" value={monthProgress === null ? "-" : `${monthProgress}%`} compact />
+          <MoodStat
+            title={moodLabel}
+            value={currentMood}
+            onClick={() => setMoodPickerOpen(true)}
+          />
+          <GoalStat
+            title="月達成率"
+            value={monthAchievement === null ? "-" : `${monthAchievement}%`}
+            compact
+            badge={monthAchievement !== null && monthAchievement >= 100 ? "達成！🎉" : undefined}
+          />
         </div>
 
         {totalTarget === 0 && (
@@ -302,52 +386,6 @@ export default function GoalDashboard({
       </section>
 
       <section className="rounded-2xl bg-white p-4 shadow-sm">
-        <div className="grid grid-cols-2 gap-3">
-          <label className="block">
-            <span className="text-xs font-bold text-gray-600">平日目標</span>
-            <input
-              type="text"
-              inputMode="numeric"
-              value={weekdayTarget}
-              onChange={(event) => setWeekdayTarget(event.target.value.replace(/[^\d]/g, ""))}
-              placeholder="平日目標"
-              className="mt-2 h-11 w-full rounded-xl border border-gray-200 px-3 text-sm font-bold outline-none focus:border-green-500 focus:ring-2 focus:ring-green-100"
-            />
-          </label>
-          <label className="block">
-            <span className="text-xs font-bold text-gray-600">休日目標</span>
-            <input
-              type="text"
-              inputMode="numeric"
-              value={holidayTarget}
-              onChange={(event) => setHolidayTarget(event.target.value.replace(/[^\d]/g, ""))}
-              placeholder="休日目標"
-              className="mt-2 h-11 w-full rounded-xl border border-gray-200 px-3 text-sm font-bold outline-none focus:border-green-500 focus:ring-2 focus:ring-green-100"
-            />
-          </label>
-        </div>
-        <button
-          type="button"
-          onClick={handleCreatePlan}
-          className="mt-3 h-11 w-full rounded-xl bg-green-600 text-sm font-bold text-white"
-        >
-          月間目標を作成
-        </button>
-        {savedMessage && (
-          <div className="mt-2 text-center text-xs font-bold text-green-700">
-            {savedMessage}
-          </div>
-        )}
-      </section>
-
-      <section className="rounded-2xl bg-white p-4 shadow-sm">
-        <div className="grid grid-cols-2 gap-3">
-          <GoalStat title="前週比" value={compareText(thisWeekTotal, previousWeekTotal)} />
-          <GoalStat title="前月比" value={compareText(actualTotal, previousMonthTotal)} />
-        </div>
-      </section>
-
-      <section className="rounded-2xl bg-white p-4 shadow-sm">
         <div className="text-sm font-bold text-gray-900">目標カレンダー</div>
         <div className="mt-3 grid grid-cols-7 gap-1 text-center text-[11px] font-bold text-gray-400">
           <div>日</div>
@@ -377,7 +415,7 @@ export default function GoalDashboard({
                 key={cell.iso}
                 type="button"
                 onClick={() => setSelectedDate(cell.iso ?? todayIsoDate())}
-                className={`flex h-20 flex-col rounded-lg border p-1 text-left text-[10px] transition active:scale-[0.98] ${
+                className={`flex h-[76px] flex-col rounded-lg border px-0.5 py-1 text-left text-[10px] transition active:scale-[0.98] ${
                   selected
                     ? "border-green-600 bg-green-100 ring-2 ring-green-100"
                     : holiday
@@ -389,13 +427,13 @@ export default function GoalDashboard({
                   {cell.day}
                 </span>
                 {target > 0 && (
-                  <span className="mt-1 truncate font-bold text-green-700">
-                    目標 {formatCurrency(target)}
+                  <span className="mt-1 w-full text-center text-[9px] font-black leading-tight text-green-700">
+                    {compactAmount(target)}
                   </span>
                 )}
                 {actual > 0 && (
-                  <span className="truncate font-bold text-gray-700">
-                    実績 {formatCurrency(actual)}
+                  <span className="w-full text-center text-[9px] font-bold leading-tight text-gray-700">
+                    {compactAmount(actual)}
                   </span>
                 )}
                 {target > 0 && actual > 0 && (
@@ -404,7 +442,7 @@ export default function GoalDashboard({
                       achieved ? "text-green-700" : "text-gray-500"
                     }`}
                   >
-                    {achieved ? "達成" : percent(actual, target)}
+                    {achieved ? "達成🎉" : percent(actual, target)}
                   </span>
                 )}
               </button>
@@ -420,18 +458,106 @@ export default function GoalDashboard({
           onChangeTarget={setDailyTarget}
           onChangeMemo={setMemo}
           onSave={handleSaveDailyGoal}
+          onDelete={handleDeleteDailyGoal}
         />
+
+        <div className="mt-3 rounded-2xl bg-green-50 p-3">
+          <div className="grid grid-cols-2 gap-2">
+            <input
+              type="text"
+              inputMode="numeric"
+              value={weekdayTarget}
+              onChange={(event) => setWeekdayTarget(event.target.value.replace(/[^\d]/g, ""))}
+              placeholder="平日目標"
+              className="h-11 w-full rounded-xl border border-green-100 bg-white px-3 text-sm font-bold outline-none focus:border-green-500 focus:ring-2 focus:ring-green-100"
+              aria-label="平日目標"
+            />
+            <input
+              type="text"
+              inputMode="numeric"
+              value={holidayTarget}
+              onChange={(event) => setHolidayTarget(event.target.value.replace(/[^\d]/g, ""))}
+              placeholder="休日目標"
+              className="h-11 w-full rounded-xl border border-green-100 bg-white px-3 text-sm font-bold outline-none focus:border-green-500 focus:ring-2 focus:ring-green-100"
+              aria-label="休日目標"
+            />
+          </div>
+          <button
+            type="button"
+            onClick={handleCreatePlan}
+            className="mt-2 h-11 w-full rounded-xl bg-green-600 text-sm font-bold text-white"
+          >
+            月間目標を作成
+          </button>
+          {savedMessage && (
+            <div className="mt-2 text-center text-xs font-bold text-green-700">
+              {savedMessage}
+            </div>
+          )}
+        </div>
       </section>
+
+      <MoodPicker
+        open={moodPickerOpen}
+        selectedMood={currentMood}
+        onSelect={handleSelectMood}
+        onClose={() => setMoodPickerOpen(false)}
+      />
     </div>
   );
 }
 
-function GoalStat({ title, value }: { title: string; value: string }) {
+function GoalStat({
+  title,
+  value,
+  featured,
+  compact,
+  badge,
+}: {
+  title: string;
+  value: string;
+  featured?: boolean;
+  compact?: boolean;
+  badge?: string;
+}) {
   return (
-    <div className="rounded-2xl bg-gray-50 px-3 py-3">
-      <div className="text-xs font-bold text-gray-500">{title}</div>
-      <div className="mt-2 text-lg font-black text-gray-900">{value}</div>
+    <div className={`rounded-2xl bg-gray-50 px-3 ${compact ? "py-2" : "py-3"}`}>
+      <div className="flex items-center justify-between gap-2">
+        <div className="text-xs font-bold text-gray-500">{title}</div>
+        {badge && (
+          <span className="rounded-full bg-pink-100 px-2 py-0.5 text-[10px] font-black text-pink-600">
+            {badge}
+          </span>
+        )}
+      </div>
+      <div className={`mt-1 font-black text-gray-900 ${featured ? "text-xl" : "text-lg"}`}>
+        {value}
+      </div>
     </div>
+  );
+}
+
+function MoodStat({
+  title,
+  value,
+  onClick,
+}: {
+  title: string;
+  value: string;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="rounded-2xl bg-green-50 px-3 py-2 text-left ring-1 ring-green-100 transition active:scale-[0.98]"
+    >
+      <div className="flex items-center justify-between gap-2">
+        <div className="text-xs font-bold text-green-700">{title}</div>
+        <span className="text-[10px] font-black text-green-600">選択</span>
+      </div>
+      <div className="mt-1 text-lg font-black text-gray-900">{value}</div>
+    </button>
   );
 }
 
@@ -443,6 +569,7 @@ function DailyGoalEditor({
   onChangeTarget,
   onChangeMemo,
   onSave,
+  onDelete,
 }: {
   date: string;
   actual: number;
@@ -451,6 +578,7 @@ function DailyGoalEditor({
   onChangeTarget: (value: string) => void;
   onChangeMemo: (value: string) => void;
   onSave: () => void;
+  onDelete: () => void;
 }) {
   const targetAmount = parseAmount(target);
 
@@ -472,17 +600,26 @@ function DailyGoalEditor({
         </div>
       </div>
 
-      <label className="mt-3 block">
+      <div className="mt-3">
         <span className="text-xs font-bold text-gray-600">目標金額</span>
-        <input
-          type="text"
-          inputMode="numeric"
-          value={target}
-          onChange={(event) => onChangeTarget(event.target.value.replace(/[^\d]/g, ""))}
-          className="mt-2 h-11 w-full rounded-xl border border-gray-200 bg-white px-3 text-sm font-bold outline-none focus:border-green-500 focus:ring-2 focus:ring-green-100"
-          placeholder="目標金額"
-        />
-      </label>
+        <div className="mt-2 flex gap-2">
+          <input
+            type="text"
+            inputMode="numeric"
+            value={target}
+            onChange={(event) => onChangeTarget(event.target.value.replace(/[^\d]/g, ""))}
+            className="h-11 min-w-0 flex-1 rounded-xl border border-gray-200 bg-white px-3 text-sm font-bold outline-none focus:border-green-500 focus:ring-2 focus:ring-green-100"
+            placeholder="目標金額"
+          />
+          <button
+            type="button"
+            onClick={onDelete}
+            className="h-11 rounded-xl border border-red-200 bg-white px-3 text-xs font-bold text-red-600"
+          >
+            削除
+          </button>
+        </div>
+      </div>
 
       <label className="mt-3 block">
         <span className="text-xs font-bold text-gray-600">メモ 任意</span>

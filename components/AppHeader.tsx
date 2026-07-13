@@ -10,6 +10,8 @@ type AppHeaderProps = {
 type Profile = {
   name?: string;
   displayName?: string;
+  rankingName?: string;
+  nickname?: string;
 };
 
 function loadProfileName() {
@@ -20,7 +22,13 @@ function loadProfileName() {
 
   try {
     const profile = JSON.parse(raw) as Profile;
-    return profile.name?.trim() || profile.displayName?.trim() || "";
+    return (
+      profile.displayName?.trim() ||
+      profile.name?.trim() ||
+      profile.rankingName?.trim() ||
+      profile.nickname?.trim() ||
+      ""
+    );
   } catch {
     return "";
   }
@@ -65,11 +73,11 @@ export default function AppHeader({ title }: AppHeaderProps) {
 
         <Link
           href="/profile"
-          className="absolute right-3 rounded-full bg-white/15 px-3 py-2 text-xs font-bold active:scale-95"
+          className="absolute right-3 rounded-full bg-white/15 px-2.5 py-2 text-xs font-bold active:scale-95"
           aria-label="プロフィール"
           title="プロフィール"
         >
-          プロフィール
+          プロフ
         </Link>
       </div>
     </header>

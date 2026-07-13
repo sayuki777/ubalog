@@ -3,10 +3,21 @@
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import GoalDashboard from "@/components/GoalDashboard";
+import PerformanceComparePanel from "@/components/PerformanceComparePanel";
+import {
+  getHighlightUpdate,
+  hasHighlight,
+  type HighlightUpdate,
+} from "@/lib/highlights";
 import { isHolidayOrWeekend } from "@/lib/japaneseHolidays";
+import {
+  formatPerformanceValue,
+  getFixedPerformanceStats,
+} from "@/lib/performance";
 import {
   ensureActiveUserFromProfile,
   getActiveUser,
+  getDisplayNameFromProfileOrUser,
   type UbalogUser,
 } from "@/lib/users";
 
@@ -16,6 +27,7 @@ const PROFILE_STORAGE_KEY = "ubalog-profile";
 type ServiceKey = "uber" | "demae" | "menu" | "rocket" | "other";
 
 type Profile = {
+  displayName?: string;
   name?: string;
   nickname?: string;
   rankingName?: string;
@@ -64,6 +76,11 @@ function formatDate(iso: string) {
 
 function formatCurrency(amount: number) {
   return `￥${amount.toLocaleString()}`;
+}
+
+function formatCalendarAmount(amount: number) {
+  if (amount >= 100000) return "10万+";
+  return amount.toLocaleString();
 }
 
 function formatMinutes(minutes: number) {
@@ -129,13 +146,6 @@ function recordBelongsToUser(record: StoredRecord, user: UbalogUser | null) {
   return record.name?.trim() === user.name;
 }
 
-function average(records: StoredRecord[]) {
-  if (records.length === 0) return 0;
-  return Math.floor(
-    records.reduce((sum, record) => sum + record.total, 0) / records.length
-  );
-}
-
 function nextMonthDate(base: Date, diff: number) {
   return new Date(base.getFullYear(), base.getMonth() + diff, 1);
 }
@@ -143,6 +153,8 @@ function nextMonthDate(base: Date, diff: number) {
 export default function PersonalDashboard() {
   const [records, setRecords] = useState<StoredRecord[]>([]);
   const [activeUser, setActiveUser] = useState<UbalogUser | null>(null);
+  const [displayName, setDisplayName] = useState("");
+  const [highlight, setHighlight] = useState<HighlightUpdate | null>(null);
   const [currentMonth, setCurrentMonth] = useState(() => new Date());
   const [selectedDate, setSelectedDate] = useState(todayIsoDate());
   const [activeTab, setActiveTab] = useState<"score" | "goal">("score");
@@ -151,18 +163,23 @@ export default function PersonalDashboard() {
     const load = () => {
       const profile = loadProfile();
       ensureActiveUserFromProfile(profile);
-      setActiveUser(getActiveUser());
+      const user = getActiveUser();
+      setActiveUser(user);
+      setDisplayName(getDisplayNameFromProfileOrUser(profile, user));
       setRecords(loadRecords());
+      setHighlight(getHighlightUpdate());
     };
 
     const timer = window.setTimeout(load, 0);
     window.addEventListener("focus", load);
     window.addEventListener("ubalog-profile-updated", load);
+    window.addEventListener("ubalog-highlight-updated", load);
 
     return () => {
       window.clearTimeout(timer);
       window.removeEventListener("focus", load);
       window.removeEventListener("ubalog-profile-updated", load);
+      window.removeEventListener("ubalog-highlight-updated", load);
     };
   }, []);
 
@@ -188,27 +205,12 @@ export default function PersonalDashboard() {
 
   const calendarDays = useMemo(() => buildCalendarDays(currentMonth), [currentMonth]);
   const selectedRecord = monthMap.get(selectedDate) ?? null;
-  const monthTotal = monthRecords.reduce((sum, record) => sum + record.total, 0);
-  const monthWorkMinutes = monthRecords.reduce(
-    (sum, record) => sum + record.workMinutes,
-    0
-  );
-  const monthDeliveries = monthRecords.reduce(
-    (sum, record) => sum + totalDeliveries(record),
-    0
-  );
-  const activeDays = monthRecords.length;
-  const monthHourly =
-    monthWorkMinutes > 0 ? Math.floor(monthTotal / (monthWorkMinutes / 60)) : 0;
-  const weekdayAverage = average(
-    monthRecords.filter((record) => !isHolidayOrWeekend(record.date))
-  );
-  const holidayAverage = average(
-    monthRecords.filter((record) => isHolidayOrWeekend(record.date))
+  const fixedStats = useMemo(
+    () => getFixedPerformanceStats(personalRecords),
+    [personalRecords]
   );
   const bestRecord = [...monthRecords].sort((a, b) => b.total - a.total)[0] ?? null;
   const best3 = [...monthRecords].sort((a, b) => b.total - a.total).slice(0, 3);
-  const averageDaily = average(monthRecords);
 
   const changeMonth = (diff: number) => {
     const next = nextMonthDate(currentMonth, diff);
@@ -221,9 +223,13 @@ export default function PersonalDashboard() {
       <section className="rounded-2xl bg-white p-4 shadow-sm">
         <div className="flex items-center justify-between">
           <div>
-            <p className="mt-1 text-xs font-bold text-green-700">
-              {activeUser?.name ?? "表示名を入力してください"}
-            </p>
+            {displayName !== "匿名配達員" && (
+              <p className="mt-1 font-bold text-green-700">
+                <span className="text-base">{displayName}</span>
+                <span className="px-0.5 text-xs">の</span>
+                <span className="text-sm">{activeTab === "score" ? "成績" : "目標"}</span>
+              </p>
+            )}
           </div>
           <div className="text-sm font-bold text-gray-900">
             {formatMonthLabel(currentMonth)}
@@ -259,18 +265,26 @@ export default function PersonalDashboard() {
       {activeTab === "score" ? (
         <>
           <section className="rounded-2xl bg-white p-4 shadow-sm">
-            <div className="grid grid-cols-2 gap-3">
-              <StatCard title="今月の合計売上" value={formatCurrency(monthTotal)} />
-              <StatCard title="今月の稼働日数" value={`${activeDays}日`} />
-              <StatCard title="今月の平均時給" value={formatCurrency(monthHourly)} />
-              <StatCard title="今月の合計件数" value={`${monthDeliveries}件`} />
-              <StatCard title="平日平均売上" value={formatCurrency(weekdayAverage)} />
-              <StatCard title="休日平均売上" value={formatCurrency(holidayAverage)} />
-              <StatCard
-                title="最高売上日"
-                value={bestRecord ? formatCurrency(bestRecord.total) : "￥0"}
-              />
-              <StatCard title="平均日給" value={formatCurrency(averageDaily)} />
+            <div className="grid grid-cols-2 gap-2">
+              {fixedStats.map((stat, index) =>
+                stat.label ? (
+                  <StatCard
+                    key={stat.label}
+                    title={stat.label}
+                    value={formatPerformanceValue(stat.value, stat.format)}
+                    highlight={
+                      (stat.label === "今日" && hasHighlight("today", highlight)) ||
+                      (stat.label === "昨日" && hasHighlight("yesterday", highlight)) ||
+                      (stat.label === "今週" && hasHighlight("thisWeek", highlight)) ||
+                      (stat.label === "先週" && hasHighlight("lastWeek", highlight)) ||
+                      (stat.label === "月最高売上" && hasHighlight("monthlyBest", highlight)) ||
+                      (stat.label === "最高単価" && hasHighlight("bestUnitPrice", highlight))
+                    }
+                  />
+                ) : (
+                  <div key={`empty-${index}`} />
+                )
+              )}
             </div>
 
             {bestRecord && (
@@ -301,6 +315,8 @@ export default function PersonalDashboard() {
               </div>
             )}
           </section>
+
+          <PerformanceComparePanel records={personalRecords} />
 
           <section className="rounded-2xl bg-white p-4 shadow-sm">
         <div className="mb-3 flex items-center justify-between">
@@ -337,7 +353,7 @@ export default function PersonalDashboard() {
         <div className="mt-2 grid grid-cols-7 gap-1">
           {calendarDays.map((cell, index) => {
             if (!cell.iso || !cell.day) {
-              return <div key={`empty-${index}`} className="h-16" />;
+              return <div key={`empty-${index}`} className="h-[68px]" />;
             }
             const record = monthMap.get(cell.iso);
             const holiday = isHolidayOrWeekend(cell.iso);
@@ -350,7 +366,7 @@ export default function PersonalDashboard() {
                 key={cell.iso}
                 type="button"
                 onClick={() => setSelectedDate(cell.iso ?? todayIsoDate())}
-                className={`flex h-16 flex-col rounded-lg border p-1 text-left transition active:scale-[0.98] ${
+                className={`flex h-[68px] flex-col rounded-lg border px-0.5 py-1 text-left transition active:scale-[0.98] ${
                   selectedDate === cell.iso
                     ? "border-green-600 bg-green-100 ring-2 ring-green-100"
                     : highSales
@@ -373,8 +389,8 @@ export default function PersonalDashboard() {
                 >
                   {cell.day}
                 </span>
-                <span className="mt-auto truncate text-center text-[10px] font-bold text-green-700">
-                  {record ? formatCurrency(record.total) : ""}
+                <span className="mt-auto w-full text-center text-[9px] font-black leading-tight text-green-700">
+                  {record ? formatCalendarAmount(record.total) : ""}
                 </span>
               </button>
             );
@@ -391,17 +407,39 @@ export default function PersonalDashboard() {
           records={personalRecords}
           currentMonth={currentMonth}
           onChangeMonth={changeMonth}
+          displayName={displayName}
         />
       )}
     </div>
   );
 }
 
-function StatCard({ title, value }: { title: string; value: string }) {
+function NewBadge() {
   return (
-    <div className="rounded-2xl bg-gray-50 px-3 py-3">
-      <div className="text-xs font-bold text-gray-500">{title}</div>
-      <div className="mt-2 text-lg font-black text-gray-900">{value}</div>
+    <span className="rounded-full bg-pink-100 px-1.5 py-0.5 text-[9px] font-black text-pink-600">
+      NEW! ✨
+    </span>
+  );
+}
+
+function StatCard({
+  title,
+  value,
+  highlight,
+}: {
+  title: string;
+  value: string;
+  highlight?: boolean;
+}) {
+  return (
+    <div className="min-w-0 rounded-2xl bg-gray-50 px-3 py-3">
+      <div className="flex min-h-5 items-center justify-between gap-2">
+        <div className="truncate text-xs font-bold text-gray-500">{title}</div>
+        {highlight && <NewBadge />}
+      </div>
+      <div className="mt-1 break-words text-lg font-black leading-tight text-gray-900">
+        {value}
+      </div>
     </div>
   );
 }
