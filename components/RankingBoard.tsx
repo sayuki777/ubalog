@@ -11,6 +11,7 @@ import {
   getActiveUser,
   type UbalogUser,
 } from "@/lib/users";
+import { fetchSharedRecords, mergeRecords } from "@/lib/sharedRecords";
 
 const RECORDS_STORAGE_KEY = "ubalog-records";
 const PROFILE_STORAGE_KEY = "ubalog-profile";
@@ -424,7 +425,14 @@ export default function RankingBoard() {
       ensureActiveUserFromProfile(nextProfile);
       setProfile(nextProfile);
       setActiveUser(getActiveUser());
-      setRecords(loadRecords());
+      const localRecords = loadRecords();
+      setRecords(localRecords);
+      void fetchSharedRecords().then((remoteRecords) => {
+        if (remoteRecords.length === 0) return;
+        setRecords(
+          mergeRecords(localRecords, remoteRecords) as StoredRecord[]
+        );
+      });
       if (nextProfile?.prefecture) setPrefectureFilter(nextProfile.prefecture);
     };
 

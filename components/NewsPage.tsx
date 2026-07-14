@@ -220,33 +220,35 @@ export default function NewsPage() {
         </section>
 
         <div className="sticky top-16 z-20 -mx-4 bg-gray-50 px-4 py-2">
-          <div className="mb-2 flex items-center justify-between">
+          <div className="mb-2 min-h-4">
             <div className="text-xs font-bold text-gray-500">
               {isRefreshing ? "更新中..." : message}
             </div>
+          </div>
+          <div className="mb-2 flex min-w-0 items-center gap-2">
+            <button
+              type="button"
+              onClick={handleWeeklySummary}
+              className="h-8 min-w-0 flex-1 truncate rounded-full border border-green-200 bg-green-50 px-3 text-xs font-bold text-green-700"
+            >
+              週間サマリー
+            </button>
             <button
               type="button"
               onClick={() => void handleRefresh()}
               disabled={isRefreshing}
-              className="h-8 rounded-full border border-green-600 bg-white px-3 text-xs font-bold text-green-700 disabled:border-gray-200 disabled:text-gray-400"
+              className="h-8 w-20 shrink-0 rounded-full border border-green-600 bg-white px-3 text-xs font-bold text-green-700 disabled:border-gray-200 disabled:text-gray-400"
             >
               更新
             </button>
           </div>
-          <button
-            type="button"
-            onClick={handleWeeklySummary}
-            className="mb-2 h-8 rounded-full border border-green-200 bg-green-50 px-3 text-xs font-bold text-green-700"
-          >
-            週間サマリーを更新
-          </button>
-          <div className="flex gap-2 overflow-x-auto pb-1">
+          <div className="grid grid-cols-3 gap-2 pb-1">
             {tabs.map((tab) => (
               <button
                 key={tab.key}
                 type="button"
                 onClick={() => setActiveTab(tab.key)}
-                className={`h-10 shrink-0 rounded-full px-4 text-sm font-bold ${
+                className={`h-9 min-w-0 truncate rounded-full px-2 text-xs font-bold ${
                   activeTab === tab.key
                     ? "bg-green-600 text-white shadow-sm"
                     : "bg-white text-gray-600"

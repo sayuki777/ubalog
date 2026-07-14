@@ -37,6 +37,7 @@ import {
   type RocketNowDailyOcrResult,
 } from "@/lib/rocketNowDailyOcr";
 import { saveSingleScanFeedback } from "@/lib/rocketNowOcrFeedback";
+import { saveRecordWithSync } from "@/lib/sharedRecords";
 
 const STORAGE_KEY = "ubalog-records";
 const PROFILE_STORAGE_KEY = "ubalog-profile";
@@ -606,6 +607,7 @@ export default function RecordForm() {
     );
 
     saveRecords(next);
+    void saveRecordWithSync(newRecord);
     if (rocketDailyScanResult && rocketDailyScanFileType) {
       saveSingleScanFeedback({
         id: `${now}-${Math.random().toString(36).slice(2)}`,

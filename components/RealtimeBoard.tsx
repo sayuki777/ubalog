@@ -12,6 +12,12 @@ import {
 } from "@/lib/rocketNowOcr";
 import { type RocketNowScanResult } from "@/lib/rocketNowScan";
 import { addBreakingRealtimeNews } from "@/lib/news";
+import {
+  deleteSharedRealtimeOffer,
+  fetchSharedRealtimeOffers,
+  mergeRealtimeOffers,
+  upsertSharedRealtimeOffer,
+} from "@/lib/realtime";
 
 const RealtimeMap = dynamic(() => import("@/components/RealtimeMap"), {
   ssr: false,
@@ -362,6 +368,13 @@ export default function RealtimeBoard() {
       );
       setOffers(loadedOffers);
       setSelectedOfferId(loadedOffers[0]?.id ?? null);
+      void fetchSharedRealtimeOffers().then((remoteOffers) => {
+        if (remoteOffers.length === 0) return;
+        const merged = mergeRealtimeOffers(loadedOffers, remoteOffers) as RealtimeOffer[];
+        saveOffers(merged);
+        setOffers(merged);
+        setSelectedOfferId((current) => current ?? merged[0]?.id ?? null);
+      });
       requestLocation();
     }, 0);
 
@@ -583,6 +596,7 @@ export default function RealtimeBoard() {
       a.createdAt < b.createdAt ? 1 : -1
     );
     saveOffers(next);
+    void upsertSharedRealtimeOffer(newOffer);
     addBreakingRealtimeNews({
       name: newOffer.name,
       amount: newOffer.amount,
@@ -623,6 +637,7 @@ export default function RealtimeBoard() {
   const handleDeleteOffer = (id: string) => {
     const next = offers.filter((offer) => offer.id !== id);
     saveOffers(next);
+    void deleteSharedRealtimeOffer(id);
     setOffers(next);
     setSelectedOfferId((current) => (current === id ? next[0]?.id ?? null : current));
     showMessage("削除しました");
@@ -633,7 +648,7 @@ export default function RealtimeBoard() {
       <AppHeader title="リアルタイム共有" />
       <Toast message={toastMessage} show={showToast} />
 
-      <section className="relative h-[calc(100dvh-8rem)] overflow-hidden bg-green-50">
+      <section className="relative h-[calc(100dvh-12rem-env(safe-area-inset-bottom))] min-h-[360px] w-full max-w-full overflow-hidden bg-green-50">
         <RealtimeMap
           center={mapCenter}
           offers={locatedOffers}
@@ -653,15 +668,15 @@ export default function RealtimeBoard() {
           }}
         />
 
-        <div className="pointer-events-none absolute left-3 top-3 rounded-2xl bg-white/95 px-3 py-2 shadow-sm">
+        <div className="pointer-events-none absolute left-3 top-3 max-w-[calc(100%-1.5rem)] rounded-2xl bg-white/95 px-3 py-2 shadow-sm">
           <div className="text-xs font-bold text-gray-500">表示中</div>
           <div className="text-sm font-bold text-gray-900">
             {filteredOffers.length}件・地図 {locatedOffers.length}件
           </div>
         </div>
 
-        <div className="absolute left-3 right-3 top-20 z-[530] rounded-2xl bg-white/95 p-2 shadow-lg">
-          <div className="flex gap-2 overflow-x-auto pb-1">
+        <div className="absolute left-3 right-3 top-20 z-[530] max-w-[calc(100%-1.5rem)] rounded-2xl bg-white/95 p-2 shadow-lg">
+          <div className="grid grid-cols-3 gap-1.5">
             {timeFilters.map((item) => {
               const active = selectedHours === item.hours;
               return (
@@ -669,7 +684,7 @@ export default function RealtimeBoard() {
                   key={item.label}
                   type="button"
                   onClick={() => setSelectedHours(item.hours)}
-                  className={`shrink-0 rounded-full px-4 py-2 text-xs font-bold ${
+                  className={`h-8 min-w-0 rounded-full px-2 text-xs font-bold ${
                     active ? "bg-green-600 text-white" : "bg-gray-100 text-gray-600"
                   }`}
                 >
@@ -680,7 +695,7 @@ export default function RealtimeBoard() {
             <button
               type="button"
               onClick={() => setListOpen(true)}
-              className="shrink-0 rounded-full bg-white px-4 py-2 text-xs font-bold text-green-700 ring-1 ring-green-200"
+              className="h-8 min-w-0 rounded-full bg-white px-2 text-xs font-bold text-green-700 ring-1 ring-green-200"
             >
               最近の共有
             </button>
@@ -700,12 +715,12 @@ export default function RealtimeBoard() {
         )}
 
         {!(positionMode === "map" && shareInputOpen && !shareOpen) && (
-          <div className="absolute bottom-4 left-3 right-3 z-[540] rounded-2xl bg-white/95 p-2 shadow-lg">
+          <div className="absolute bottom-4 left-3 right-3 z-[540] max-w-[calc(100%-1.5rem)] rounded-2xl bg-white/95 p-2 shadow-lg">
             <div className="grid grid-cols-5 gap-1">
               <button
                 type="button"
                 onClick={() => setSelectedService(null)}
-                className={`h-9 rounded-xl px-1 text-[11px] font-bold ${
+                className={`h-9 min-w-0 truncate rounded-xl px-1 text-[10px] font-bold ${
                   selectedService === null ? "bg-green-600 text-white" : "bg-gray-100 text-gray-600"
                 }`}
               >
@@ -718,7 +733,7 @@ export default function RealtimeBoard() {
                     key={item}
                     type="button"
                     onClick={() => setSelectedService(item)}
-                    className={`h-9 rounded-xl px-1 text-[11px] font-bold ${
+                    className={`h-9 min-w-0 truncate rounded-xl px-1 text-[10px] font-bold ${
                       active ? "bg-green-600 text-white" : "bg-gray-100 text-gray-600"
                     }`}
                   >
