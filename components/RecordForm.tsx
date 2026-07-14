@@ -1,7 +1,8 @@
 ﻿"use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import Link from "next/link";
+import { Camera } from "lucide-react";
 import { useRouter, useSearchParams } from "next/navigation";
 import AppHeader from "@/components/AppHeader";
 import BottomMenu from "@/components/BottomMenu";
@@ -9,6 +10,9 @@ import OnboardingCard from "@/components/OnboardingCard";
 import CongratsOverlay from "@/components/CongratsOverlay";
 import SaveButton from "@/components/SaveButton";
 import Toast from "@/components/Toast";
+import RocketNowDailyScanGuide from "@/components/RocketNowDailyScanGuide";
+import RocketNowBulkImportPanel from "@/components/RocketNowBulkImportPanel";
+import RocketNowBulkHistoryPanel from "@/components/RocketNowBulkHistoryPanel";
 import { PREFECTURES } from "@/lib/areas";
 import { getMonthlyGoal } from "@/lib/goals";
 import { saveHighlightUpdate, type HighlightField } from "@/lib/highlights";
@@ -27,6 +31,12 @@ import {
   ensureActiveUserFromProfile,
   setActiveUser,
 } from "@/lib/users";
+import {
+  readRocketNowDailyFromImage,
+  readRocketNowDailyFromVideo,
+  type RocketNowDailyOcrResult,
+} from "@/lib/rocketNowDailyOcr";
+import { saveSingleScanFeedback } from "@/lib/rocketNowOcrFeedback";
 
 const STORAGE_KEY = "ubalog-records";
 const PROFILE_STORAGE_KEY = "ubalog-profile";
@@ -140,6 +150,12 @@ function todayIsoDate() {
   return `${y}-${m}-${d}`;
 }
 
+function offsetIsoDate(offsetDays: number) {
+  const date = new Date();
+  date.setDate(date.getDate() + offsetDays);
+  return toIsoDate(date);
+}
+
 function monthKeyFromDate(iso: string) {
   return iso.slice(0, 7);
 }
@@ -221,6 +237,19 @@ function formatCurrency(amount: number) {
   return `￥${amount.toLocaleString()}`;
 }
 
+function formatShortDateLabel(value: string, fallback?: string) {
+  const matched = fallback?.trim();
+  const dateMatch = matched?.match(/\d{1,2}\s*[\/\-.]\s*\d{1,2}/)?.[0];
+  const [year, month, day] = value.split("-").map(Number);
+  const date = new Date(year, month - 1, day);
+  const weekday = ["日", "月", "火", "水", "木", "金", "土"][date.getDay()];
+  const label = dateMatch
+    ? dateMatch.replace(/\s/g, "").replace(/[-.]/g, "/")
+    : `${String(month).padStart(2, "0")}/${String(day).padStart(2, "0")}`;
+
+  return `${label} ${weekday}`;
+}
+
 function formatBreakMinutes(minutes: number) {
   const h = Math.floor(minutes / 60);
   const m = minutes % 60;
@@ -241,6 +270,7 @@ function roundTimeToFiveMinutes(value: string) {
 export default function RecordForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
+  const rocketDailyFileInputRef = useRef<HTMLInputElement | null>(null);
 
   const [date, setDate] = useState(todayIsoDate());
   const [startTime, setStartTime] = useState("");
@@ -274,6 +304,12 @@ export default function RecordForm() {
   const [recordGuideDismissed, setRecordGuideDismissed] = useState(false);
   const [showAfterSaveActions, setShowAfterSaveActions] = useState(false);
   const [afterSaveMessage, setAfterSaveMessage] = useState("");
+  const [rocketDailyScanLoading, setRocketDailyScanLoading] = useState(false);
+  const [rocketDailyScanMessage, setRocketDailyScanMessage] = useState("");
+  const [rocketDailyScanResult, setRocketDailyScanResult] =
+    useState<RocketNowDailyOcrResult | null>(null);
+  const [rocketDailyScanFileType, setRocketDailyScanFileType] =
+    useState<"image" | "video" | null>(null);
 
   useEffect(() => {
     const queryDate = searchParams.get("date");
@@ -351,6 +387,9 @@ export default function RecordForm() {
         setComment("");
       }
 
+      setRocketDailyScanResult(null);
+      setRocketDailyScanFileType(null);
+      setRocketDailyScanMessage("");
       setLoaded(true);
     }, 0);
 
@@ -456,10 +495,44 @@ export default function RecordForm() {
         : `あと ${formatCurrency(Math.abs(goalDiff))}`
       : "";
   const showRecordGuide = !recordGuideDismissed && !isEditing && recordCount < 3;
+  const showRocketDailyScanStatus =
+    rocketDailyScanLoading || Boolean(rocketDailyScanMessage) || Boolean(rocketDailyScanResult);
 
   const dismissRecordGuide = () => {
     writeStorageBoolean(RECORD_GUIDE_DISMISSED_KEY, true);
     setRecordGuideDismissed(true);
+  };
+
+  const applyRocketDailyScanResult = (
+    result: RocketNowDailyOcrResult,
+    fileType: "image" | "video"
+  ) => {
+    if (typeof result.amount === "number") setRocket(String(result.amount));
+    if (typeof result.deliveries === "number") setRocketCount(String(result.deliveries));
+    setRocketDailyScanResult(result);
+    setRocketDailyScanFileType(fileType);
+    setRocketDailyScanMessage("");
+  };
+
+  const handleRocketDailyScanFile = async (file: File | undefined) => {
+    if (!file || rocketDailyScanLoading) return;
+
+    const fileType: "image" | "video" = file.type.startsWith("video/") ? "video" : "image";
+    setRocketDailyScanLoading(true);
+    setRocketDailyScanMessage("\u8aad\u307f\u53d6\u308a\u4e2d...");
+
+    try {
+      const result = fileType === "video"
+        ? await readRocketNowDailyFromVideo(file, date)
+        : await readRocketNowDailyFromImage(file, date);
+      applyRocketDailyScanResult(result, fileType);
+    } catch {
+      setRocketDailyScanResult(null);
+      setRocketDailyScanFileType(null);
+      setRocketDailyScanMessage("\u8aad\u307f\u53d6\u308c\u307e\u305b\u3093\u3067\u3057\u305f\u3002\u624b\u5165\u529b\u3057\u3066\u304f\u3060\u3055\u3044");
+    } finally {
+      setRocketDailyScanLoading(false);
+    }
   };
 
   const handleSave = () => {
@@ -533,6 +606,25 @@ export default function RecordForm() {
     );
 
     saveRecords(next);
+    if (rocketDailyScanResult && rocketDailyScanFileType) {
+      saveSingleScanFeedback({
+        id: `${now}-${Math.random().toString(36).slice(2)}`,
+        createdAt: now,
+        type: "single",
+        targetDate: date,
+        matchedDateLabel: formatShortDateLabel(
+          date,
+          rocketDailyScanResult.matchedDateLabel
+        ),
+        ocrAmount: rocketDailyScanResult.amount,
+        ocrDeliveries: rocketDailyScanResult.deliveries,
+        baseAmount: rocketDailyScanResult.baseAmount,
+        adjustmentAmount: rocketDailyScanResult.adjustmentAmount,
+        correctedAmount: parseInt(rocket || "0", 10) || 0,
+        correctedDeliveries: parseInt(rocketCount || "0", 10) || 0,
+        fileType: rocketDailyScanFileType,
+      });
+    }
     if (startTime && endTime) {
       saveLastWorkTime({
         startTime,
@@ -625,20 +717,20 @@ export default function RecordForm() {
       )}
 
       <div className="sticky top-16 z-20 border-b bg-white px-4 pb-3 pt-3">
-        <div className="grid grid-cols-[1fr_1fr_1fr] gap-2">
+        <div className="grid grid-cols-[1.45fr_1fr_1fr] gap-2">
           <input
             type="text"
             value={profileName}
             maxLength={10}
             onChange={(e) => handleNameChange(e.target.value)}
-            className="h-10 min-w-0 rounded-xl border border-gray-200 bg-gray-50 px-2 text-sm font-bold outline-none focus:border-green-500 focus:ring-2 focus:ring-green-100"
-            placeholder="表示名"
-            aria-label="表示名"
+            className="h-10 min-w-0 rounded-xl border border-gray-200 bg-gray-50 px-2 text-[13px] font-bold outline-none focus:border-green-500 focus:ring-2 focus:ring-green-100"
+            placeholder="表示名入力"
+            aria-label="表示名入力"
           />
           <select
             value={prefecture}
             onChange={(e) => handlePrefectureChange(e.target.value)}
-            className="h-10 min-w-0 rounded-xl border border-gray-200 bg-gray-50 px-2 text-sm font-bold outline-none focus:border-green-500 focus:ring-2 focus:ring-green-100"
+            className="h-10 min-w-0 rounded-xl border border-gray-200 bg-gray-50 px-1.5 text-xs font-bold outline-none focus:border-green-500 focus:ring-2 focus:ring-green-100"
             aria-label="都道府県"
           >
             <option value="">都道府県</option>
@@ -652,26 +744,10 @@ export default function RecordForm() {
             type="text"
             value={profileArea}
             onChange={(e) => handleAreaChange(e.target.value)}
-            className="h-10 min-w-0 rounded-xl border border-gray-200 bg-gray-50 px-2 text-sm font-bold outline-none focus:border-green-500 focus:ring-2 focus:ring-green-100"
+            className="h-10 min-w-0 rounded-xl border border-gray-200 bg-gray-50 px-2 text-xs font-bold outline-none focus:border-green-500 focus:ring-2 focus:ring-green-100"
             placeholder="エリア"
             aria-label="エリア"
           />
-        </div>
-
-        <div className="mt-3 flex items-center justify-between gap-3">
-          <div className="flex items-center gap-2 text-sm text-gray-700">
-            <span>日付</span>
-            <input
-              type="date"
-              value={date}
-              onChange={(e) => setDate(e.target.value)}
-              className="rounded-md border px-2 py-1"
-            />
-          </div>
-
-          <div className="shrink-0 rounded-full bg-green-50 px-3 py-1 text-xs font-bold text-green-700">
-            {date.replaceAll("-", "/")}
-          </div>
         </div>
 
         <div className="mt-3 rounded-2xl bg-green-50 px-3 py-2">
@@ -706,7 +782,7 @@ export default function RecordForm() {
         </div>
       </div>
 
-      <div className="px-4 py-4 pb-[calc(8rem+env(safe-area-inset-bottom))]">
+      <div className="px-4 py-4 pb-[calc(14rem+env(safe-area-inset-bottom))]">
         {showRecordGuide && (
           <div className="mb-4">
             <OnboardingCard
@@ -719,10 +795,35 @@ export default function RecordForm() {
           </div>
         )}
 
-        <div className="rounded-2xl bg-white p-4 shadow-sm">
-          <div className="text-base font-bold text-gray-900">稼働 {workText}</div>
+        <div className="mb-3 rounded-2xl bg-white p-3 shadow-sm">
+          <div className="flex items-center gap-2">
+            <div className="shrink-0 text-sm font-bold text-gray-700">日付</div>
+            <input
+              type="date"
+              value={date}
+              onChange={(e) => setDate(e.target.value)}
+              className="h-10 min-w-0 flex-1 rounded-xl border border-gray-200 bg-gray-50 px-2 text-sm font-bold outline-none focus:border-green-500 focus:ring-2 focus:ring-green-100"
+            />
+            <button
+              type="button"
+              onClick={() => setDate(todayIsoDate())}
+              className="h-9 shrink-0 rounded-full bg-green-600 px-3 text-xs font-bold text-white active:bg-green-700"
+            >
+              今日
+            </button>
+            <button
+              type="button"
+              onClick={() => setDate(offsetIsoDate(-1))}
+              className="h-9 shrink-0 rounded-full bg-gray-100 px-3 text-xs font-bold text-gray-700 active:bg-gray-200"
+            >
+              昨日
+            </button>
+          </div>
+        </div>
 
-          <div className="mt-3 flex flex-wrap items-center gap-2 text-sm text-gray-700">
+        <div className="rounded-2xl bg-white p-4 shadow-sm">
+
+          <div className="flex flex-wrap items-center gap-2 text-sm text-gray-700">
             <span>開始</span>
             <input
               type="time"
@@ -768,7 +869,45 @@ export default function RecordForm() {
             <Row company="Uber" value={uber} count={uberCount} onChange={setUber} onCountChange={setUberCount} />
             <Row company="出前館" value={demae} count={demaeCount} onChange={setDemae} onCountChange={setDemaeCount} />
             <Row company="menu" value={menu} count={menuCount} onChange={setMenu} onCountChange={setMenuCount} />
-            <Row company="Rocket" value={rocket} count={rocketCount} onChange={setRocket} onCountChange={setRocketCount} />
+            <Row
+              company="Rocket"
+              value={rocket}
+              count={rocketCount}
+              onChange={setRocket}
+              onCountChange={setRocketCount}
+              status={showRocketDailyScanStatus ? (
+                <RocketDailyScanStatus
+                  date={date}
+                  loading={rocketDailyScanLoading}
+                  message={rocketDailyScanMessage}
+                  result={rocketDailyScanResult}
+                />
+              ) : undefined}
+              scanControl={
+                <>
+                  <input
+                    ref={rocketDailyFileInputRef}
+                    type="file"
+                    accept="image/*,video/*"
+                    className="hidden"
+                    onChange={(event) => {
+                      void handleRocketDailyScanFile(event.target.files?.[0]);
+                      event.target.value = "";
+                    }}
+                  />
+                  <button
+                    type="button"
+                    title={"\u30ed\u30b1\u30ca\u30a6\u65e5\u5225\u58f2\u4e0a\u3092\u8aad\u307f\u53d6\u308b"}
+                    aria-label={"\u30ed\u30b1\u30ca\u30a6\u65e5\u5225\u58f2\u4e0a\u3092\u8aad\u307f\u53d6\u308b"}
+                    disabled={rocketDailyScanLoading}
+                    onClick={() => rocketDailyFileInputRef.current?.click()}
+                    className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-green-200 bg-green-50 text-green-700 active:bg-green-100 disabled:border-gray-200 disabled:bg-gray-50 disabled:text-gray-300"
+                  >
+                    <Camera size={16} strokeWidth={2.5} />
+                  </button>
+                </>
+              }
+            />
             <Row company="その他" value={other} count={otherCount} onChange={setOther} onCountChange={setOtherCount} />
           </div>
 
@@ -814,6 +953,31 @@ export default function RecordForm() {
             </div>
           </section>
         )}
+
+        <div className="mt-4 space-y-3">
+          <RocketNowDailyScanGuide />
+          <RocketNowBulkImportPanel
+            selectedDate={date}
+            profile={{
+              name: profileName || "匿名配達員",
+              prefecture,
+              area: profileArea,
+            }}
+            onCurrentDateImported={({ amount, deliveries }) => {
+              setRocket(String(amount));
+              setRocketCount(String(deliveries));
+            }}
+            onSelectDate={setDate}
+          />
+          <RocketNowBulkHistoryPanel
+            selectedDate={date}
+            onCurrentDateRestored={({ amount, deliveries }) => {
+              setRocket(amount > 0 ? String(amount) : "");
+              setRocketCount(deliveries > 0 ? String(deliveries) : "");
+            }}
+          />
+          <RocketNowDisplayResetButton />
+        </div>
       </div>
 
       <SaveButton onClick={handleSave} />
@@ -828,44 +992,134 @@ function Row({
   count,
   onChange,
   onCountChange,
+  scanControl,
+  status,
 }: {
   company: string;
   value: string;
   count: string;
   onChange: (value: string) => void;
   onCountChange: (value: string) => void;
+  scanControl?: ReactNode;
+  status?: ReactNode;
 }) {
   return (
-    <div className="flex items-center justify-between gap-2">
-      <div className="w-20 shrink-0 text-sm font-semibold text-gray-800">
-        {company}
-      </div>
+    <div className="min-w-0 space-y-1">
+      <div className="flex min-w-0 items-center justify-between gap-2">
+        <div className="w-16 shrink-0 text-sm font-semibold text-gray-800 sm:w-20">
+          {company}
+        </div>
 
-      <div className="flex items-center rounded-lg border border-gray-200 bg-white px-2 py-2 focus-within:border-green-500 focus-within:ring-2 focus-within:ring-green-100">
-        <span className="mr-1 text-sm text-gray-500">￥</span>
-        <input
-          type="text"
-          inputMode="numeric"
-          value={value}
-          placeholder="0"
-          onChange={(e) => onChange(e.target.value.replace(/[^\d]/g, ""))}
-          className="w-24 border-none bg-transparent text-right text-sm outline-none"
-        />
-      </div>
+        {scanControl}
 
-      <div className="flex items-center rounded-lg border border-gray-200 bg-white px-2 py-2 focus-within:border-green-500 focus-within:ring-2 focus-within:ring-green-100">
-        <input
-          type="text"
-          inputMode="numeric"
-          value={count}
-          placeholder="0"
-          onChange={(e) => onCountChange(e.target.value.replace(/[^\d]/g, ""))}
-          className="w-10 border-none bg-transparent text-right text-sm outline-none"
-        />
-        <span className="ml-1 text-sm text-gray-500">件</span>
+        <div className="flex min-w-0 flex-1 items-center rounded-lg border border-gray-200 bg-white px-2 py-2 focus-within:border-green-500 focus-within:ring-2 focus-within:ring-green-100">
+          <span className="mr-1 text-sm text-gray-500">{"\uffe5"}</span>
+          <input
+            type="text"
+            inputMode="numeric"
+            value={value}
+            placeholder="0"
+            onChange={(e) => onChange(e.target.value.replace(/[^\d]/g, ""))}
+            className="w-full min-w-0 border-none bg-transparent text-right text-sm outline-none"
+          />
+        </div>
+
+        <div className="flex w-[4.5rem] shrink-0 items-center rounded-lg border border-gray-200 bg-white px-2 py-2 focus-within:border-green-500 focus-within:ring-2 focus-within:ring-green-100">
+          <input
+            type="text"
+            inputMode="numeric"
+            value={count}
+            placeholder="0"
+            onChange={(e) => onCountChange(e.target.value.replace(/[^\d]/g, ""))}
+            className="w-full min-w-0 border-none bg-transparent text-right text-sm outline-none"
+          />
+          <span className="ml-1 shrink-0 text-sm text-gray-500">{"\u4ef6"}</span>
+        </div>
       </div>
+      {status && (
+        <div className="min-w-0 pl-[4.5rem] sm:pl-[5.5rem]">
+          {status}
+        </div>
+      )}
     </div>
   );
 }
 
+function RocketNowDisplayResetButton() {
+  const resetDisplay = () => {
+    [
+      "ubalog-rocketnow-guide-open",
+      "ubalog-rocketnow-bulk-panel-open",
+      "ubalog-rocketnow-accuracy-panel-open",
+      "ubalog-rocketnow-history-panel-open",
+    ].forEach((key) => localStorage.removeItem(key));
+    window.location.reload();
+  };
 
+  return (
+    <div className="flex justify-center">
+      <button
+        type="button"
+        onClick={resetDisplay}
+        className="rounded-full bg-gray-100 px-3 py-1.5 text-[11px] font-bold text-gray-500 active:bg-gray-200"
+      >
+        表示を整える
+      </button>
+    </div>
+  );
+}
+
+function RocketDailyScanStatus({
+  date,
+  loading,
+  message,
+  result,
+}: {
+  date: string;
+  loading: boolean;
+  message: string;
+  result: RocketNowDailyOcrResult | null;
+}) {
+  if (loading) {
+    return (
+      <div className="text-[11px] font-bold text-green-700">
+        読み取り中...
+      </div>
+    );
+  }
+
+  if (result) {
+    const baseAmount = result.baseAmount ?? result.amount ?? 0;
+    const adjustmentAmount = result.adjustmentAmount;
+    const totalAmount = result.amount ?? baseAmount + adjustmentAmount;
+    const deliveries = result.deliveries ?? 0;
+
+    return (
+      <div className="max-w-full rounded-xl bg-green-50 px-2.5 py-2 text-[11px] leading-4 text-green-800">
+        <div className="flex min-w-0 flex-wrap items-center gap-x-1.5 gap-y-0.5 font-black">
+          <span className="rounded-full bg-green-100 px-2 py-0.5 text-[10px] text-green-700">
+            反映済み
+          </span>
+          <span>ロケナウ読取: {formatShortDateLabel(date, result.matchedDateLabel)}</span>
+        </div>
+        <div className="mt-0.5 break-words font-bold">
+          日別 {formatCurrency(baseAmount)}
+          {adjustmentAmount > 0 && (
+            <> + 調整 {formatCurrency(adjustmentAmount)} = {formatCurrency(totalAmount)}</>
+          )}
+          {" / "}配達{deliveries.toLocaleString()}件
+        </div>
+      </div>
+    );
+  }
+
+  if (message) {
+    return (
+      <div className="text-[11px] font-bold text-red-600">
+        {message}
+      </div>
+    );
+  }
+
+  return null;
+}

@@ -153,12 +153,7 @@ export default function ProfilePage() {
 
       <div className="px-4 pb-32 pt-4">
         <section className="rounded-2xl bg-white p-4 shadow-sm">
-          <div>
-            <h2 className="text-xl font-bold text-gray-900">プロフィール</h2>
-            <p className="mt-1 text-sm text-gray-500">プロフィールを設定できます</p>
-          </div>
-
-          <div className="mt-4 space-y-3">
+          <div className="space-y-3">
             <Field label="表示名（ニックネーム）">
               <input
                 type="text"
@@ -168,17 +163,6 @@ export default function ProfilePage() {
                 placeholder="例: ウバログ太郎"
               />
             </Field>
-
-            <Field label="名前">
-              <input
-                type="text"
-                value={profile.realName}
-                onChange={(e) => updateField("realName", e.target.value)}
-                className="h-11 w-full rounded-xl border border-gray-200 bg-white px-3 text-sm outline-none focus:border-green-500 focus:ring-2 focus:ring-green-100"
-                placeholder="任意"
-              />
-            </Field>
-
             <Field label="都道府県">
               <select
                 value={profile.prefecture}

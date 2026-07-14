@@ -8,6 +8,7 @@ import FirstStepGuide from "@/components/FirstStepGuide";
 import PersonalDashboard from "@/components/PersonalDashboard";
 import PersonalNewsCard from "@/components/PersonalNewsCard";
 import RealDeviceTestPanel from "@/components/RealDeviceTestPanel";
+import RocketNowStatsCard from "@/components/RocketNowStatsCard";
 import TestOperationPanel from "@/components/TestOperationPanel";
 import {
   getHighlightUpdate,
@@ -17,7 +18,6 @@ import {
 import { getMonthlyGoal } from "@/lib/goals";
 import {
   ONBOARDING_DISMISSED_KEY,
-  PROFILE_GUIDE_DISMISSED_KEY,
   readStorageBoolean,
   writeStorageBoolean,
 } from "@/lib/onboarding";
@@ -156,20 +156,16 @@ export default function HomeDashboard() {
   const [highlight, setHighlight] = useState<HighlightUpdate | null>(null);
   const [weeklyGoal, setWeeklyGoal] = useState(0);
   const [todayGoal, setTodayGoal] = useState(0);
-  const [hasDisplayName, setHasDisplayName] = useState(true);
   const [mainService, setMainService] = useState("");
   const [onboardingDismissed, setOnboardingDismissed] = useState(false);
-  const [profileGuideDismissed, setProfileGuideDismissed] = useState(false);
 
   useEffect(() => {
     const load = () => {
       const profile = loadProfile();
       ensureActiveUserFromProfile(profile);
       setDisplayName(displayNameFromProfile(profile));
-      setHasDisplayName(Boolean(profile?.displayName?.trim() || profile?.name?.trim()));
       setMainService(profile?.mainService?.trim() ?? "");
       setOnboardingDismissed(readStorageBoolean(ONBOARDING_DISMISSED_KEY));
-      setProfileGuideDismissed(readStorageBoolean(PROFILE_GUIDE_DISMISSED_KEY));
       setHighlight(getHighlightUpdate());
       const plan = getMonthlyGoal(todayIsoDate().slice(0, 7));
       const thisWeekRange = weekRange(0);
@@ -263,11 +259,6 @@ export default function HomeDashboard() {
     setOnboardingDismissed(true);
   };
 
-  const dismissProfileGuide = () => {
-    writeStorageBoolean(PROFILE_GUIDE_DISMISSED_KEY, true);
-    setProfileGuideDismissed(true);
-  };
-
   return (
     <main className="mx-auto min-h-screen w-full max-w-[430px] bg-gray-50 pb-24">
       <AppHeader />
@@ -297,16 +288,15 @@ export default function HomeDashboard() {
 
         <FirstStepGuide
           recordsCount={records.length}
-          hasDisplayName={hasDisplayName}
           onboardingDismissed={onboardingDismissed}
-          profileGuideDismissed={profileGuideDismissed}
           onDismissOnboarding={dismissOnboarding}
-          onDismissProfileGuide={dismissProfileGuide}
         />
 
         <PersonalNewsCard />
 
         <PersonalDashboard />
+
+        <RocketNowStatsCard />
 
         <section className="mt-4 rounded-2xl bg-white p-4 shadow-sm">
           <div className="text-base font-bold text-gray-900">前日のランキング TOP3</div>

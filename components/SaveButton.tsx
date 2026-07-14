@@ -4,7 +4,7 @@ type SaveButtonProps = {
 
 export default function SaveButton({ onClick }: SaveButtonProps) {
   return (
-    <div className="fixed bottom-16 left-0 right-0 z-40 bg-gradient-to-t from-gray-50 via-gray-50 to-transparent px-4 pb-3 pt-3">
+    <div className="fixed bottom-[calc(4rem+env(safe-area-inset-bottom))] left-0 right-0 z-40 bg-gradient-to-t from-gray-50 via-gray-50 to-transparent px-4 pb-3 pt-3">
       <div className="mx-auto w-full max-w-[430px]">
         <button
           type="button"

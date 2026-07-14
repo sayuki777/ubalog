@@ -1,4 +1,4 @@
-export type AffiliateAdCategory = "driver" | "coupon";
+export type AffiliateAdCategory = "driver" | "customer";
 
 export type AffiliateAd = {
   id: string;
@@ -51,7 +51,7 @@ export const affiliateAds: AffiliateAd[] = [
   },
   {
     id: "uber-coupon",
-    category: "coupon",
+    category: "customer",
     title: "Uber Eats クーポン",
     url: "https://ubereats.com/feed?promoCode=eats-3wka2w",
     messages: [
@@ -63,7 +63,7 @@ export const affiliateAds: AffiliateAd[] = [
   },
   {
     id: "rocketnow-coupon",
-    category: "coupon",
+    category: "customer",
     title: "ロケットナウ クーポン",
     url: "https://share.rocketnow.co.jp/fA9nEGxZJ4b",
     messages: [
@@ -75,7 +75,7 @@ export const affiliateAds: AffiliateAd[] = [
   },
   {
     id: "menu-coupon",
-    category: "coupon",
+    category: "customer",
     title: "menu クーポン",
     url: "https://me.nu/fu5lj36",
     messages: [
@@ -97,11 +97,24 @@ function readForceFlag() {
   }
 }
 
-export function shouldShowAffiliateAds(now = new Date()) {
-  if (readForceFlag()) return true;
+export function shouldShowCustomerAffiliateAds() {
+  return true;
+}
 
+export function shouldShowDriverAffiliateAds(now = new Date()) {
+  if (readForceFlag()) return true;
   const start = new Date(now.getFullYear(), 7, 1);
   return now >= start;
+}
+
+export function shouldShowAffiliateAds(now = new Date()) {
+  return shouldShowCustomerAffiliateAds() || shouldShowDriverAffiliateAds(now);
+}
+
+export function canShowAffiliateAd(ad: AffiliateAd, now = new Date()) {
+  return ad.category === "customer"
+    ? shouldShowCustomerAffiliateAds()
+    : shouldShowDriverAffiliateAds(now);
 }
 
 function dateSeed(now = new Date()) {
@@ -139,11 +152,13 @@ export function pickAffiliateAd({
   now?: Date;
 }) {
   const seed = `${dateSeed(now)}:${placement}:${slot}`;
-  const available = affiliateAds.filter((ad) => !excludeIds.includes(ad.id));
+  const available = affiliateAds.filter(
+    (ad) => !excludeIds.includes(ad.id) && canShowAffiliateAd(ad, now)
+  );
   if (available.length === 0) return null;
 
   const shouldPickDriver = (hashText(`${seed}:category`) % 100) < driverWeight * 100;
-  const category: AffiliateAdCategory = shouldPickDriver ? "driver" : "coupon";
+  const category: AffiliateAdCategory = shouldPickDriver ? "driver" : "customer";
   const categoryAds = available.filter((ad) => ad.category === category);
   const pool = categoryAds.length > 0 ? categoryAds : available;
 

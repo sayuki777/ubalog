@@ -75,20 +75,17 @@ type CurrentLocation = {
 type PositionMode = "current" | "map";
 
 type RocketNowFinalValues = {
-  service: "ロケナウ";
   amount: number;
   distanceKm: number;
-  shopName?: string;
-  dropoffArea?: string;
-  comment?: string;
 };
 
 type RocketNowScanFeedback = {
   id: string;
   createdAt: string;
-  originalResult: RocketNowScanResult;
-  finalValues: RocketNowFinalValues;
-  changedFields: string[];
+  ocrAmount?: number;
+  correctedAmount: number;
+  ocrDistanceKm?: number;
+  correctedDistanceKm: number;
 };
 
 function loadOffers(): RealtimeOffer[] {
@@ -214,38 +211,6 @@ function rankLabel(rank: OfferRank) {
   return "Cランク：慎重に判断";
 }
 
-function trimValue(value?: string) {
-  return value?.trim() ?? "";
-}
-
-function optionalNumber(value?: number) {
-  return typeof value === "number" && Number.isFinite(value) ? value : undefined;
-}
-
-function getRocketNowChangedFields(
-  original: RocketNowScanResult,
-  finalValues: RocketNowFinalValues
-) {
-  const changedFields: string[] = [];
-
-  if (optionalNumber(original.amount) !== finalValues.amount) {
-    changedFields.push("amount");
-  }
-
-  if (optionalNumber(original.distanceKm) !== finalValues.distanceKm) {
-    changedFields.push("distanceKm");
-  }
-
-  if (trimValue(original.shopName) !== trimValue(finalValues.shopName)) {
-    changedFields.push("shopName");
-  }
-
-  if (trimValue(original.dropoffArea) !== trimValue(finalValues.dropoffArea)) {
-    changedFields.push("dropoffArea");
-  }
-
-  return changedFields;
-}
 
 function isWithinHours(iso: string, hours: number) {
   const created = new Date(iso).getTime();
@@ -457,28 +422,13 @@ export default function RealtimeBoard() {
     : null;
   const isRocketNowScan = inputSource === "scan" && selectedScanService === "ロケナウ";
   const rocketNowFinalValues = useMemo<RocketNowFinalValues | null>(() => {
-    if (service !== "ロケナウ") return null;
+    if (service !== "\u30ed\u30b1\u30ca\u30a6") return null;
 
     return {
-      service: "ロケナウ",
       amount: amountNumber,
       distanceKm: distanceNumber,
-      shopName: shopName.trim(),
-      dropoffArea: dropoffArea.trim(),
-      comment: comment.trim(),
     };
-  }, [
-    amountNumber,
-    comment,
-    distanceNumber,
-    dropoffArea,
-    service,
-    shopName,
-  ]);
-  const rocketNowChangedFields = useMemo(() => {
-    if (!rocketNowScanResult || !rocketNowFinalValues) return [];
-    return getRocketNowChangedFields(rocketNowScanResult, rocketNowFinalValues);
-  }, [rocketNowFinalValues, rocketNowScanResult]);
+  }, [amountNumber, distanceNumber, service]);
 
   const clearScanResult = () => {
     setRocketNowScanResult(null);
@@ -642,9 +592,10 @@ export default function RealtimeBoard() {
       saveRocketNowScanFeedback({
         id: `${now}-${Math.random().toString(36).slice(2)}`,
         createdAt: now,
-        originalResult: rocketNowScanResult,
-        finalValues: rocketNowFinalValues,
-        changedFields: rocketNowChangedFields,
+        ocrAmount: rocketNowScanResult.amount,
+        correctedAmount: rocketNowFinalValues.amount,
+        ocrDistanceKm: rocketNowScanResult.distanceKm,
+        correctedDistanceKm: rocketNowFinalValues.distanceKm,
       });
     }
     setOffers(next);
@@ -678,7 +629,7 @@ export default function RealtimeBoard() {
   };
 
   return (
-    <main className="mx-auto h-[100dvh] w-full max-w-[430px] overflow-hidden bg-gray-50">
+    <main className="mx-auto h-[100dvh] w-full max-w-[430px] overflow-x-hidden bg-gray-50">
       <AppHeader title="リアルタイム共有" />
       <Toast message={toastMessage} show={showToast} />
 
@@ -709,46 +660,7 @@ export default function RealtimeBoard() {
           </div>
         </div>
 
-        {!(positionMode === "map" && shareInputOpen && !shareOpen) && (
-        <div className="absolute bottom-32 right-4 z-[560] flex flex-col items-center gap-3">
-          <button
-            type="button"
-            onClick={openShareSheet}
-            className="flex h-20 w-20 items-center justify-center rounded-full bg-green-600 text-center text-base font-bold leading-tight text-white shadow-2xl ring-4 ring-white active:scale-95"
-          >
-            ＋共有
-          </button>
-        </div>
-        )}
-
-        {positionMode === "map" && !shareOpen && (
-          <div className="absolute left-4 right-20 top-24 z-[520] rounded-2xl bg-white/95 px-4 py-3 text-sm font-bold text-gray-800 shadow-lg">
-            {pickedLocation
-              ? "地図上で位置指定済み"
-              : "地図をタップして共有位置を指定してください"}
-          </div>
-        )}
-
-        {positionMode === "map" && shareInputOpen && !shareOpen && (
-          <div className="absolute bottom-28 left-3 right-3 z-[560]">
-            <ShareSyncFooter
-              amountNumber={amountNumber}
-              distanceNumber={distanceNumber}
-              unitPrice={unitPrice}
-              rank={rank}
-              shopName={shopName}
-              canSubmit={canSubmitOffer}
-              missingMessage={syncMissingMessage}
-              onSubmit={() => void handleSubmit()}
-              onEdit={() => setShareOpen(true)}
-              variant="map"
-              service={service}
-              actionLabel="共有する"
-            />
-          </div>
-        )}
-
-        <div className="absolute bottom-0 left-0 right-0 z-[500] bg-gradient-to-t from-white via-white to-white/80 px-3 pb-3 pt-3 shadow-[0_-10px_24px_rgba(0,0,0,0.08)]">
+        <div className="absolute left-3 right-3 top-20 z-[530] rounded-2xl bg-white/95 p-2 shadow-lg">
           <div className="flex gap-2 overflow-x-auto pb-1">
             {timeFilters.map((item) => {
               const active = selectedHours === item.hours;
@@ -773,34 +685,78 @@ export default function RealtimeBoard() {
               最近の共有
             </button>
           </div>
-
-          <div className="mt-2 flex gap-2 overflow-x-auto pb-1">
-            <button
-              type="button"
-              onClick={() => setSelectedService(null)}
-              className={`shrink-0 rounded-full px-4 py-2 text-xs font-bold ${
-                selectedService === null ? "bg-green-600 text-white" : "bg-gray-100 text-gray-600"
-              }`}
-            >
-              すべて
-            </button>
-            {services.map((item) => {
-              const active = selectedService === item;
-              return (
-                <button
-                  key={item}
-                  type="button"
-                  onClick={() => setSelectedService(item)}
-                  className={`shrink-0 rounded-full px-4 py-2 text-xs font-bold ${
-                    active ? "bg-green-600 text-white" : "bg-gray-100 text-gray-600"
-                  }`}
-                >
-                  {item}
-                </button>
-              );
-            })}
-          </div>
         </div>
+
+        {!(positionMode === "map" && shareInputOpen && !shareOpen) && (
+        <div className="absolute bottom-24 right-4 z-[560] flex flex-col items-center gap-3">
+          <button
+            type="button"
+            onClick={openShareSheet}
+            className="flex h-20 w-20 items-center justify-center rounded-full bg-green-600 text-center text-base font-bold leading-tight text-white shadow-2xl ring-4 ring-white active:scale-95"
+          >
+            ＋共有
+          </button>
+        </div>
+        )}
+
+        {!(positionMode === "map" && shareInputOpen && !shareOpen) && (
+          <div className="absolute bottom-4 left-3 right-3 z-[540] rounded-2xl bg-white/95 p-2 shadow-lg">
+            <div className="grid grid-cols-5 gap-1">
+              <button
+                type="button"
+                onClick={() => setSelectedService(null)}
+                className={`h-9 rounded-xl px-1 text-[11px] font-bold ${
+                  selectedService === null ? "bg-green-600 text-white" : "bg-gray-100 text-gray-600"
+                }`}
+              >
+                すべて
+              </button>
+              {services.map((item) => {
+                const active = selectedService === item;
+                return (
+                  <button
+                    key={item}
+                    type="button"
+                    onClick={() => setSelectedService(item)}
+                    className={`h-9 rounded-xl px-1 text-[11px] font-bold ${
+                      active ? "bg-green-600 text-white" : "bg-gray-100 text-gray-600"
+                    }`}
+                  >
+                    {item}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
+        {positionMode === "map" && !shareOpen && (
+          <div className="absolute left-4 right-20 top-24 z-[520] rounded-2xl bg-white/95 px-4 py-3 text-sm font-bold text-gray-800 shadow-lg">
+            {pickedLocation
+              ? "地図上で位置指定済み"
+              : "地図をタップして共有位置を指定してください"}
+          </div>
+        )}
+
+        {positionMode === "map" && shareInputOpen && !shareOpen && (
+          <div className="absolute bottom-24 left-3 right-3 z-[560] max-w-[406px]">
+            <ShareSyncFooter
+              amountNumber={amountNumber}
+              distanceNumber={distanceNumber}
+              unitPrice={unitPrice}
+              rank={rank}
+              shopName={shopName}
+              canSubmit={canSubmitOffer}
+              missingMessage={syncMissingMessage}
+              onSubmit={() => void handleSubmit()}
+              onEdit={() => setShareOpen(true)}
+              variant="map"
+              service={service}
+              actionLabel="共有する"
+            />
+          </div>
+        )}
+
       </section>
 
       {listOpen && (
@@ -887,7 +843,9 @@ export default function RealtimeBoard() {
                   </div>
                 )}
 
-                {inputSource === "scan" && currentScanConfig && (
+                {inputSource === "scan" &&
+                  currentScanConfig &&
+                  (scanLoading || scanErrorMessage || shareImageMessage) && (
                   <div className="rounded-2xl border border-green-100 bg-green-50 px-3 py-2">
                     <div className="text-xs font-bold text-green-700">
                       {scanErrorMessage ||

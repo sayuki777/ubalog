@@ -200,7 +200,7 @@ export default function RealtimeMap({
             }}
           >
             <Popup>
-              <div className="min-w-40 text-sm text-gray-800">
+              <div className="min-w-0 max-w-[240px] break-words text-sm text-gray-800">
                 <div className="rounded-xl bg-green-50 px-3 py-2">
                   <div className="text-[11px] font-bold text-green-700">報酬</div>
                   <div className="text-2xl font-black text-gray-900">
@@ -220,7 +220,7 @@ export default function RealtimeMap({
                     {offer.distanceKm.toLocaleString()}km
                   </span>
                 </div>
-                <div className="mt-2 space-y-1 text-xs font-bold text-gray-700">
+                <div className="mt-2 min-w-0 space-y-1 break-words text-xs font-bold text-gray-700">
                   <div>{normalizeService(offer.service)}</div>
                   <div>{offerName(offer)}</div>
                   {trimmedArea && <div>エリア: {trimmedArea}</div>}

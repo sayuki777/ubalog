@@ -3,8 +3,8 @@
 import Link from "next/link";
 import {
   affiliateMessageFor,
+  canShowAffiliateAd,
   pickAffiliateAd,
-  shouldShowAffiliateAds,
   type AffiliateAd,
 } from "@/lib/affiliateAds";
 
@@ -23,8 +23,6 @@ export default function AffiliateMiniAd({
   driverWeight,
   excludeIds,
 }: AffiliateMiniAdProps) {
-  if (!shouldShowAffiliateAds()) return null;
-
   const selected =
     ad ??
     pickAffiliateAd({
@@ -34,7 +32,7 @@ export default function AffiliateMiniAd({
       excludeIds,
     });
 
-  if (!selected) return null;
+  if (!selected || !canShowAffiliateAd(selected)) return null;
 
   const message = affiliateMessageFor(selected, `${placement}:${slot}`);
   const content = (

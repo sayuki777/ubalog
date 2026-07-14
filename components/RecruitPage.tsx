@@ -21,23 +21,23 @@ const preparationItems = [
 const worryItems = [
   {
     title: "どのサービスから始めればいい？",
-    body: "まずは自分のエリアで募集や注文が多いサービスを選ぶと始めやすいです。",
+    body: "エリアや生活リズムに合うサービスから試すと始めやすいです。",
   },
   {
     title: "どのエリアが稼ぎやすい？",
-    body: "時間帯や曜日で変わります。稼働した結果をウバログに残すと傾向を見つけやすくなります。",
+    body: "曜日や時間で変わります。ウバログに記録すると傾向を見つけやすくなります。",
   },
   {
     title: "バイクと自転車どちらがいい？",
-    body: "短距離中心なら自転車、広い範囲を回るならバイクや軽貨物が合う場合があります。",
+    body: "短距離中心なら自転車、広く動くならバイクや軽貨物が合う場合があります。",
   },
   {
     title: "副業でもできる？",
-    body: "スキマ時間で始めやすい働き方ですが、無理のない曜日と時間を決めておくと続けやすいです。",
+    body: "スキマ時間で始める人もいます。無理のない曜日と時間を決めておくと続けやすいです。",
   },
   {
     title: "確定申告は必要？",
-    body: "収入や働き方によって変わります。売上や稼働日を記録しておくと確認しやすくなります。",
+    body: "働き方や収入で変わります。売上や稼働日を記録しておくと確認しやすくなります。",
   },
 ];
 
@@ -95,8 +95,6 @@ export default function RecruitPage() {
     });
   };
 
-  const allChecked = loaded && checkedItems.length === checklistItems.length;
-
   const copyReferralCode = async (serviceId: string, code: string) => {
     setFallbackCode("");
 
@@ -114,6 +112,8 @@ export default function RecruitPage() {
       setCopiedServiceId(serviceId);
     }
   };
+
+  const allChecked = loaded && checkedItems.length === checklistItems.length;
 
   return (
     <main className="mx-auto min-h-screen w-full max-w-[430px] bg-gray-50 pb-24">
@@ -135,8 +135,7 @@ export default function RecruitPage() {
         <section className="rounded-2xl bg-white p-4 shadow-sm">
           <h2 className="text-lg font-black text-gray-900">はじめての人へ</h2>
           <p className="mt-2 text-sm font-bold leading-6 text-gray-600">
-            フードデリバリーは、登録するサービスや稼働エリアによって働き方が変わります。
-            まずは必要なものをそろえ、売上や稼働時間をウバログに残しながら、自分に合う形を探していきましょう。
+            サービスやエリアによって働き方は変わります。必要なものをそろえて、記録しながら自分に合う形を探していきましょう。
           </p>
         </section>
 
@@ -156,16 +155,15 @@ export default function RecruitPage() {
               <div className="mt-3 rounded-xl bg-gray-50 px-3 py-2 text-xs font-bold leading-5 text-gray-600">
                 {item.point}
               </div>
-              {item.referralCode && (
+
+              {item.referralCode && item.referralType === "copy" && (
                 <div className="mt-3 rounded-xl border border-green-100 bg-green-50 px-3 py-2">
-                  <div className="text-[11px] font-bold text-green-700">
-                    {item.referralType === "copy" ? "招待コード" : "紹介コード"}
-                  </div>
+                  <div className="text-[11px] font-bold text-green-700">招待コード</div>
                   <div className="mt-1 flex items-center justify-between gap-3">
                     <div className="text-lg font-black tracking-wide text-gray-900">
                       {item.referralCode}
                     </div>
-                    {item.referralType === "copy" && item.copyButtonLabel && (
+                    {item.copyButtonLabel && (
                       <button
                         type="button"
                         onClick={() => {
@@ -197,6 +195,7 @@ export default function RecruitPage() {
                   )}
                 </div>
               )}
+
               {item.url ? (
                 <Link
                   href={item.url}
@@ -251,7 +250,7 @@ export default function RecruitPage() {
           <div className="flex items-start justify-between gap-3">
             <div>
               <h2 className="text-lg font-black text-gray-900">登録前チェック</h2>
-              <p className="mt-1 text-xs font-bold text-gray-500">準備できたものをタップ</p>
+              <p className="mt-1 text-xs font-bold text-gray-500">準備できたものをチェック</p>
             </div>
             {allChecked && (
               <span className="rounded-full bg-green-100 px-3 py-1 text-xs font-black text-green-700">
@@ -275,14 +274,6 @@ export default function RecruitPage() {
               </label>
             ))}
           </div>
-        </section>
-
-        <section className="rounded-2xl bg-white p-4 shadow-sm">
-          <h2 className="text-lg font-black text-gray-900">紹介コード・リンク案内</h2>
-          <p className="mt-2 text-sm font-bold leading-6 text-gray-600">
-            紹介コードや登録リンクは、サービスごとのカードに表示します。
-            空欄のサービスは、公式情報や募集条件を確認してから登録を進めてください。
-          </p>
         </section>
 
         <section className="rounded-2xl bg-white p-4 shadow-sm">

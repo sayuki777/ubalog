@@ -45,7 +45,35 @@ export default function PersonalNewsCard() {
     () => {
       const personal = [...personalItems].sort((a, b) => newsTime(b) - newsTime(a));
       const external = [...externalItems].sort((a, b) => newsTime(b) - newsTime(a));
-      return [...personal.slice(0, 3), ...external].slice(0, 3);
+      const selected: UbalogNewsItem[] = [];
+      const used = new Set<string>();
+      const add = (item?: UbalogNewsItem) => {
+        if (!item) return;
+        const key = `${item.source}-${item.id}`;
+        if (used.has(key)) return;
+        used.add(key);
+        selected.push(item);
+      };
+      const highlight = personal.find(
+        (item) =>
+          item.category === "ranking" ||
+          item.category === "breaking" ||
+          item.type === "ranking_top_update" ||
+          item.type === "area_top_update" ||
+          item.type === "breaking_record"
+      );
+
+      add(personal.find((item) => item !== highlight));
+      add(highlight);
+      add(external[0]);
+
+      [...personal, ...external]
+        .sort((a, b) => newsTime(b) - newsTime(a))
+        .forEach((item) => {
+          if (selected.length < 3) add(item);
+        });
+
+      return selected.slice(0, 3);
     },
     [externalItems, personalItems]
   );

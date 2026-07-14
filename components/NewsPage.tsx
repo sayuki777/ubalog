@@ -5,7 +5,7 @@ import AffiliateMiniAd from "@/components/AffiliateMiniAd";
 import AppHeader from "@/components/AppHeader";
 import BottomMenu from "@/components/BottomMenu";
 import NewsItemCard from "@/components/NewsItemCard";
-import { pickAffiliateAd, shouldShowAffiliateAds } from "@/lib/affiliateAds";
+import { pickAffiliateAd, shouldShowCustomerAffiliateAds } from "@/lib/affiliateAds";
 import {
   fetchExternalNews,
   getCachedExternalNews,
@@ -164,7 +164,7 @@ export default function NewsPage() {
     [activeTab, allItems]
   );
   const newsAds = useMemo(() => {
-    if (activeTab !== "all" || filteredItems.length < 2 || !shouldShowAffiliateAds()) {
+    if (activeTab !== "all" || filteredItems.length < 2 || !shouldShowCustomerAffiliateAds()) {
       return [];
     }
 
@@ -211,15 +211,15 @@ export default function NewsPage() {
     <main className="mx-auto min-h-screen w-full max-w-[430px] bg-gray-50 pb-24">
       <AppHeader title="ニュース" />
 
-      <div className="px-4 pt-4">
-        <section className="rounded-2xl bg-white p-4 shadow-sm">
+      <div className="px-4 pt-2">
+        <section className="hidden">
           <h1 className="text-xl font-bold text-gray-900">ニュース</h1>
           <div className="mt-3 rounded-2xl bg-gray-50 px-3 py-3 text-sm font-bold text-gray-500">
             記録と配達まわりの話題をまとめて確認できます
           </div>
         </section>
 
-        <div className="sticky top-16 z-20 -mx-4 mt-3 bg-gray-50 px-4 py-2">
+        <div className="sticky top-16 z-20 -mx-4 bg-gray-50 px-4 py-2">
           <div className="mb-2 flex items-center justify-between">
             <div className="text-xs font-bold text-gray-500">
               {isRefreshing ? "更新中..." : message}

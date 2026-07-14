@@ -520,8 +520,18 @@ function GoalStat({
   compact?: boolean;
   badge?: string;
 }) {
+  const achieved = Boolean(badge);
+
   return (
-    <div className={`rounded-2xl bg-gray-50 px-3 ${compact ? "py-2" : "py-3"}`}>
+    <div
+      className={`rounded-2xl border px-3 ${
+        compact ? "py-2" : "py-3"
+      } ${
+        achieved
+          ? "border-emerald-300 bg-emerald-50"
+          : "border-transparent bg-gray-50"
+      }`}
+    >
       <div className="flex items-center justify-between gap-2">
         <div className="text-xs font-bold text-gray-500">{title}</div>
         {badge && (
@@ -530,7 +540,11 @@ function GoalStat({
           </span>
         )}
       </div>
-      <div className={`mt-1 font-black text-gray-900 ${featured ? "text-xl" : "text-lg"}`}>
+      <div
+        className={`mt-1 font-black ${
+          achieved ? "text-emerald-700" : "text-gray-900"
+        } ${featured ? "text-xl" : "text-lg"}`}
+      >
         {value}
       </div>
     </div>
