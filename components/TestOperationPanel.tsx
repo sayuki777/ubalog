@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useMemo, useState } from "react";
+import AdminTestDataPanel from "@/components/AdminTestDataPanel";
 
 const STORAGE_KEY = "ubalog-public-test-checklist";
 
@@ -191,6 +192,8 @@ export default function TestOperationPanel() {
           </div>
         )}
       </section>
+
+      <AdminTestDataPanel />
 
       <section className="rounded-2xl bg-white p-4 shadow-sm">
         <h2 className="text-base font-black text-gray-900">確認ショートカット</h2>
