@@ -5,6 +5,7 @@ import { useEffect, useState } from "react";
 import AppHeader from "@/components/AppHeader";
 import BottomMenu from "@/components/BottomMenu";
 import DataBackupPanel from "@/components/DataBackupPanel";
+import FooterLinks from "@/components/FooterLinks";
 import Toast from "@/components/Toast";
 import { getRegionByPrefecture, PREFECTURES } from "@/lib/areas";
 import { PROFILE_GUIDE_DISMISSED_KEY, writeStorageBoolean } from "@/lib/onboarding";
@@ -337,6 +338,8 @@ export default function ProfilePage() {
             </div>
           </Link>
         )}
+
+        <FooterLinks />
       </div>
 
       <div className="fixed bottom-16 left-0 right-0 z-40 bg-gradient-to-t from-gray-50 via-gray-50 to-transparent px-4 pb-3 pt-3">

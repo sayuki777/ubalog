@@ -5,6 +5,7 @@ import Link from "next/link";
 import AppHeader from "@/components/AppHeader";
 import AppInstallGuide from "@/components/AppInstallGuide";
 import BottomMenu from "@/components/BottomMenu";
+import FooterLinks from "@/components/FooterLinks";
 import FirstStepGuide from "@/components/FirstStepGuide";
 import PersonalDashboard from "@/components/PersonalDashboard";
 import PersonalNewsCard from "@/components/PersonalNewsCard";
@@ -474,6 +475,8 @@ export default function HomeDashboard() {
         </section>
 
         <AppInstallGuide />
+
+        <FooterLinks />
       </div>
 
       <BottomMenu />

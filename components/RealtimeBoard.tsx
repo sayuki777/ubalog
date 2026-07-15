@@ -954,6 +954,11 @@ export default function RealtimeBoard() {
             <p className="text-xs text-gray-500">
               詳しすぎる場所は入れず、目安として使ってください。
             </p>
+            <div className="rounded-2xl bg-gray-50 px-3 py-3 text-xs leading-5 text-gray-600">
+              <div>位置は目安で共有してください。</div>
+              <div>個人情報や詳しすぎる住所は入れないでください。</div>
+              <div>投稿内容は参考情報として使ってください。</div>
+            </div>
           </div>
         </BottomSheet>
       )}
