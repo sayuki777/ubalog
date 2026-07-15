@@ -34,6 +34,8 @@ const STORAGE_KEY = "ubalog-realtime-offers";
 const PROFILE_STORAGE_KEY = "ubalog-profile";
 const ROCKETNOW_SCAN_FEEDBACK_STORAGE_KEY = "ubalog-rocketnow-scan-feedbacks";
 const DEFAULT_CENTER: [number, number] = [35.681, 139.767];
+const MAX_MAP_OFFERS = 100;
+const MAX_RECENT_OFFERS = 20;
 const services = ["Uber", "出前館", "ロケナウ", "menu"] as const;
 const timeFilters = [
   { label: "1h", hours: 1 },
@@ -356,6 +358,7 @@ export default function RealtimeBoard() {
   const [rocketNowScanResult, setRocketNowScanResult] =
     useState<RocketNowScanResult | null>(null);
   const [scanErrorMessage, setScanErrorMessage] = useState("");
+  const [submittingOffer, setSubmittingOffer] = useState(false);
   const [toastMessage, setToastMessage] = useState("共有しました");
   const [showToast, setShowToast] = useState(false);
   const [helpOpen, setHelpOpen] = useState(false);
@@ -483,7 +486,11 @@ export default function RealtimeBoard() {
   }, [offers, selectedHours, selectedService]);
 
   const locatedOffers = useMemo(
-    () => filteredOffers.filter(hasLocation),
+    () => filteredOffers.filter(hasLocation).slice(0, MAX_MAP_OFFERS),
+    [filteredOffers]
+  );
+  const recentOffers = useMemo(
+    () => filteredOffers.slice(0, MAX_RECENT_OFFERS),
     [filteredOffers]
   );
 
@@ -619,6 +626,7 @@ export default function RealtimeBoard() {
   };
 
   const handleSubmit = async () => {
+    if (submittingOffer) return;
     if (!canSync) return;
     if (!canPostRealtimeOfferNow()) {
       showMessage("少し待ってから投稿してください");
@@ -629,83 +637,89 @@ export default function RealtimeBoard() {
       return;
     }
 
-    let submitLocation: CurrentLocation | null = null;
+    setSubmittingOffer(true);
 
-    if (positionMode === "map") {
-      submitLocation = pickedLocation;
-    } else {
-      submitLocation = currentLocation ?? (await readCurrentLocation());
-    }
+    try {
+      let submitLocation: CurrentLocation | null = null;
 
-    const now = new Date().toISOString();
-    const shouldSaveRocketNowFeedback =
-      isRocketNowScan && rocketNowScanResult && rocketNowFinalValues;
-    const newOffer: RealtimeOffer = {
-      id: createRealtimeOfferId(),
-      createdAt: now,
-      name: displayNameFromProfile(loadProfile()),
-      area: area.trim(),
-      service,
-      amount: amountNumber,
-      distanceKm: distanceNumber,
-      unitPrice,
-      rank,
-      comment: comment.trim(),
-      shopName: shopName.trim(),
-      dropoffArea: dropoffArea.trim(),
-      inputSource,
-      ...(inputSource === "scan" && selectedScanService
-        ? { scanService: selectedScanService }
-        : {}),
-      ...(service === "ロケナウ"
-        ? {}
-        : {}),
-      ...(submitLocation ? submitLocation : {}),
-    };
+      if (positionMode === "map") {
+        submitLocation = pickedLocation;
+      } else {
+        submitLocation = currentLocation ?? (await readCurrentLocation());
+      }
 
-    const next = [newOffer, ...offers].sort((a, b) =>
-      a.createdAt < b.createdAt ? 1 : -1
-    );
-    saveOffers(next);
-    markRealtimeOfferPosted();
-    void upsertSharedRealtimeOffer(newOffer);
-    addBreakingRealtimeNews({
-      name: newOffer.name,
-      amount: newOffer.amount,
-      service: newOffer.service,
-      offerId: newOffer.id,
-    });
-    if (shouldSaveRocketNowFeedback) {
-      saveRocketNowScanFeedback({
-        id: `${now}-${Math.random().toString(36).slice(2)}`,
+      const now = new Date().toISOString();
+      const shouldSaveRocketNowFeedback =
+        isRocketNowScan && rocketNowScanResult && rocketNowFinalValues;
+      const newOffer: RealtimeOffer = {
+        id: createRealtimeOfferId(),
         createdAt: now,
-        ocrAmount: rocketNowScanResult.amount,
-        correctedAmount: rocketNowFinalValues.amount,
-        ocrDistanceKm: rocketNowScanResult.distanceKm,
-        correctedDistanceKm: rocketNowFinalValues.distanceKm,
-      });
-    }
-    setOffers(next);
-    setSelectedOfferId(newOffer.id);
+        name: displayNameFromProfile(loadProfile()),
+        area: area.trim(),
+        service,
+        amount: amountNumber,
+        distanceKm: distanceNumber,
+        unitPrice,
+        rank,
+        comment: comment.trim(),
+        shopName: shopName.trim(),
+        dropoffArea: dropoffArea.trim(),
+        inputSource,
+        ...(inputSource === "scan" && selectedScanService
+          ? { scanService: selectedScanService }
+          : {}),
+        ...(service === "ロケナウ"
+          ? {}
+          : {}),
+        ...(submitLocation ? submitLocation : {}),
+      };
 
-    setArea("");
-    setService("Uber");
-    setAmount("");
-    setDistanceKm("");
-    setComment("");
-    setShopName("");
-    setDropoffArea("");
-    setInputSource("manual");
-    setSelectedScanService(null);
-    setPickedLocation(null);
-    setPositionMode("current");
-    setShareOpen(false);
-    setShareInputOpen(false);
-    setShareImageMessage("");
-    clearScanResult();
-    setScanLoading(false);
-    setLastSharedOffer(newOffer);
-    showMessage("共有しました");
+      const next = [newOffer, ...offers].sort((a, b) =>
+        a.createdAt < b.createdAt ? 1 : -1
+      );
+      saveOffers(next);
+      markRealtimeOfferPosted();
+      void upsertSharedRealtimeOffer(newOffer);
+      addBreakingRealtimeNews({
+        name: newOffer.name,
+        amount: newOffer.amount,
+        service: newOffer.service,
+        offerId: newOffer.id,
+      });
+      if (shouldSaveRocketNowFeedback) {
+        saveRocketNowScanFeedback({
+          id: `${now}-${Math.random().toString(36).slice(2)}`,
+          createdAt: now,
+          ocrAmount: rocketNowScanResult.amount,
+          correctedAmount: rocketNowFinalValues.amount,
+          ocrDistanceKm: rocketNowScanResult.distanceKm,
+          correctedDistanceKm: rocketNowFinalValues.distanceKm,
+        });
+      }
+      setOffers(next);
+      setSelectedOfferId(newOffer.id);
+
+      setArea("");
+      setService("Uber");
+      setAmount("");
+      setDistanceKm("");
+      setComment("");
+      setShopName("");
+      setDropoffArea("");
+      setInputSource("manual");
+      setSelectedScanService(null);
+      setPickedLocation(null);
+      setPositionMode("current");
+      setShareOpen(false);
+      setShareInputOpen(false);
+      setShareImageMessage("");
+      clearScanResult();
+      setScanLoading(false);
+      setLastSharedOffer(newOffer);
+      showMessage("共有しました");
+    } finally {
+      setSubmittingOffer(false);
+    }
   };
 
   const handleDeleteOffer = (id: string) => {
@@ -926,13 +940,13 @@ export default function RealtimeBoard() {
               unitPrice={unitPrice}
               rank={rank}
               shopName={shopName}
-              canSubmit={canSubmitOffer}
+              canSubmit={canSubmitOffer && !submittingOffer}
               missingMessage={syncMissingMessage}
               onSubmit={() => void handleSubmit()}
               onEdit={() => setShareOpen(true)}
               variant="map"
               service={service}
-              actionLabel="共有する"
+              actionLabel={submittingOffer ? "共有中..." : "共有する"}
             />
           </div>
         )}
@@ -975,7 +989,7 @@ export default function RealtimeBoard() {
             </div>
           ) : (
             <div className="space-y-3">
-              {filteredOffers.map((offer) => (
+              {recentOffers.map((offer) => (
                 <OfferCard
                   key={offer.id}
                   offer={offer}
@@ -1235,12 +1249,12 @@ export default function RealtimeBoard() {
                 unitPrice={unitPrice}
                 rank={rank}
                 shopName={shopName}
-                canSubmit={canSync}
+                canSubmit={canSync && !submittingOffer}
                 missingMessage={sheetMissingMessage}
                 onSubmit={handleStartMapSync}
                 variant="sheet"
                 service={service}
-                actionLabel="地図に同期"
+                actionLabel={submittingOffer ? "共有中..." : "地図に同期"}
               />
               </div>
             )}

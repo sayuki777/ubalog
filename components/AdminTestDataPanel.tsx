@@ -285,6 +285,11 @@ export default function AdminTestDataPanel() {
   const [admin, setAdmin] = useState(false);
   const [message, setMessage] = useState<PanelMessage | null>(null);
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const [busy, setBusy] = useState(false);
+
+  const finishBusy = () => {
+    window.setTimeout(() => setBusy(false), 250);
+  };
 
   useEffect(() => {
     const timer = window.setTimeout(() => {
@@ -306,32 +311,43 @@ export default function AdminTestDataPanel() {
   if (!admin) return null;
 
   const addRecordData = () => {
+    if (busy) return;
+    setBusy(true);
     const current = readArrayStorage<unknown>(RECORDS_STORAGE_KEY);
     const production = current.filter((item) => !isTestData(item));
     writeArrayStorage(RECORDS_STORAGE_KEY, [...production, ...buildTestRecords()]);
     window.dispatchEvent(new Event("ubalog-records-updated"));
     setConfirmDelete(false);
     setMessage({ tone: "success", text: "ランキング確認データを追加しました" });
+    finishBusy();
   };
 
   const addOfferData = () => {
+    if (busy) return;
+    setBusy(true);
     const production = loadLocalRealtimeOffers().filter((item) => !isTestData(item));
     saveLocalRealtimeOffers([...production, ...buildTestOffers()]);
     window.dispatchEvent(new Event("ubalog-realtime-offers-updated"));
     setConfirmDelete(false);
     setMessage({ tone: "success", text: "単価ランキング確認データを追加しました" });
+    finishBusy();
   };
 
   const addNewsData = () => {
+    if (busy) return;
+    setBusy(true);
     const current = readArrayStorage<unknown>(NEWS_STORAGE_KEY);
     const production = current.filter((item) => !isTestData(item));
     writeArrayStorage(NEWS_STORAGE_KEY, [...buildTestNews(), ...production]);
     window.dispatchEvent(new Event("ubalog-news-updated"));
     setConfirmDelete(false);
     setMessage({ tone: "success", text: "ニュース確認データを追加しました" });
+    finishBusy();
   };
 
   const deleteTestData = () => {
+    if (busy) return;
+    setBusy(true);
     const records = readArrayStorage<unknown>(RECORDS_STORAGE_KEY).filter((item) => !isTestData(item));
     const offers = readArrayStorage<unknown>(REALTIME_OFFERS_STORAGE_KEY).filter(
       (item) => !isTestData(item)
@@ -346,6 +362,7 @@ export default function AdminTestDataPanel() {
     window.dispatchEvent(new Event("ubalog-news-updated"));
     setConfirmDelete(false);
     setMessage({ tone: "success", text: "テストデータを削除しました" });
+    finishBusy();
   };
 
   return (
@@ -360,21 +377,24 @@ export default function AdminTestDataPanel() {
         <button
           type="button"
           onClick={addRecordData}
-          className="rounded-xl bg-green-600 px-3 py-3 text-sm font-black text-white active:bg-green-700"
+          disabled={busy}
+          className="rounded-xl bg-green-600 px-3 py-3 text-sm font-black text-white active:bg-green-700 disabled:bg-gray-300"
         >
           ランキング確認データを追加
         </button>
         <button
           type="button"
           onClick={addOfferData}
-          className="rounded-xl bg-green-50 px-3 py-3 text-sm font-black text-green-700 active:bg-green-100"
+          disabled={busy}
+          className="rounded-xl bg-green-50 px-3 py-3 text-sm font-black text-green-700 active:bg-green-100 disabled:text-gray-400"
         >
           単価ランキング確認データを追加
         </button>
         <button
           type="button"
           onClick={addNewsData}
-          className="rounded-xl bg-green-50 px-3 py-3 text-sm font-black text-green-700 active:bg-green-100"
+          disabled={busy}
+          className="rounded-xl bg-green-50 px-3 py-3 text-sm font-black text-green-700 active:bg-green-100 disabled:text-gray-400"
         >
           ニュース確認データを追加
         </button>
@@ -408,7 +428,8 @@ export default function AdminTestDataPanel() {
         <button
           type="button"
           onClick={() => setConfirmDelete(true)}
-          className="w-full rounded-xl bg-white px-3 py-2.5 text-sm font-black text-orange-700 active:bg-orange-100"
+          disabled={busy}
+          className="w-full rounded-xl bg-white px-3 py-2.5 text-sm font-black text-orange-700 active:bg-orange-100 disabled:text-gray-400"
         >
           テストデータを削除
         </button>
@@ -421,7 +442,8 @@ export default function AdminTestDataPanel() {
               <button
                 type="button"
                 onClick={deleteTestData}
-                className="rounded-xl bg-orange-500 px-3 py-2 text-xs font-black text-white active:bg-orange-600"
+                disabled={busy}
+                className="rounded-xl bg-orange-500 px-3 py-2 text-xs font-black text-white active:bg-orange-600 disabled:bg-gray-300"
               >
                 削除する
               </button>

@@ -1,5 +1,6 @@
 import { collection, getDocs, setDoc, doc } from "firebase/firestore";
 import { db } from "@/lib/firebase";
+import { safeParseJson } from "@/lib/storage";
 
 export const SHARED_RECORDS_COLLECTION = "ubalog_records";
 export const DEVICE_ID_STORAGE_KEY = "ubalog-device-id";
@@ -34,15 +35,6 @@ export type SharedRecord = {
   hiddenAt?: string;
   hiddenReason?: string;
 };
-
-function safeJsonParse<T>(raw: string | null, fallback: T): T {
-  if (!raw) return fallback;
-  try {
-    return JSON.parse(raw) as T;
-  } catch {
-    return fallback;
-  }
-}
 
 function createDeviceId() {
   if (globalThis.crypto?.randomUUID) return globalThis.crypto.randomUUID();
@@ -133,7 +125,7 @@ export function getDeviceId() {
 
 export function loadLocalRecords() {
   if (typeof window === "undefined") return [];
-  const parsed = safeJsonParse<SharedRecord[]>(
+  const parsed = safeParseJson<SharedRecord[]>(
     localStorage.getItem(RECORDS_STORAGE_KEY),
     []
   );

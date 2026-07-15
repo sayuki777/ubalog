@@ -1,6 +1,7 @@
 import { collection, deleteDoc, doc, getDocs, setDoc } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import { getDeviceId } from "@/lib/sharedRecords";
+import { safeParseJson } from "@/lib/storage";
 
 export const REALTIME_OFFERS_COLLECTION = "ubalog_realtime_offers";
 export const REALTIME_OFFERS_STORAGE_KEY = "ubalog-realtime-offers";
@@ -31,18 +32,9 @@ export type SharedRealtimeOffer = {
   [key: string]: unknown;
 };
 
-function safeJsonParse<T>(raw: string | null, fallback: T): T {
-  if (!raw) return fallback;
-  try {
-    return JSON.parse(raw) as T;
-  } catch {
-    return fallback;
-  }
-}
-
 export function loadLocalRealtimeOffers() {
   if (typeof window === "undefined") return [];
-  const parsed = safeJsonParse<SharedRealtimeOffer[]>(
+  const parsed = safeParseJson<SharedRealtimeOffer[]>(
     localStorage.getItem(REALTIME_OFFERS_STORAGE_KEY),
     []
   );

@@ -30,6 +30,7 @@ import {
 
 const RECORDS_STORAGE_KEY = "ubalog-records";
 const PROFILE_STORAGE_KEY = "ubalog-profile";
+const RANKING_PAGE_SIZE = 50;
 
 type ServiceKey = "uber" | "demae" | "menu" | "rocket" | "other";
 type PeriodKey = "today" | "yesterday" | "week" | "month" | "previousMonth" | "calendar";
@@ -677,6 +678,7 @@ export default function RankingBoard() {
     entry: RankingEntry;
     rank: number;
   } | null>(null);
+  const [visibleCount, setVisibleCount] = useState(RANKING_PAGE_SIZE);
   const focusMode = searchParams.get("focus");
 
   useEffect(() => {
@@ -743,8 +745,9 @@ export default function RankingBoard() {
     regionFilter,
   ]);
 
-  const top3 = rankingEntries.slice(0, 3);
-  const others = rankingEntries.slice(3);
+  const visibleRankingEntries = rankingEntries.slice(0, visibleCount);
+  const visibleTop3 = visibleRankingEntries.slice(0, 3);
+  const visibleOthers = visibleRankingEntries.slice(3);
   const myRankIndex = rankingEntries.findIndex((entry) => entry.isCurrentUser);
   const showRankingAd = rankingMetric !== "unitPrice" && rankingEntries.length >= 2;
   const shouldFocusMe = focusMode === "me";
@@ -821,6 +824,11 @@ export default function RankingBoard() {
     return () => window.clearTimeout(timer);
   }, [myRankIndex, shouldFocusMe]);
 
+  useEffect(() => {
+    const timer = window.setTimeout(() => setVisibleCount(RANKING_PAGE_SIZE), 0);
+    return () => window.clearTimeout(timer);
+  }, [calendarDate, period, prefectureFilter, rankingMetric, regionFilter]);
+
   return (
     <main className="mx-auto min-h-screen w-full max-w-[430px] overflow-x-hidden bg-gray-50">
       <AppHeader title="ランキング" />
@@ -876,7 +884,7 @@ export default function RankingBoard() {
                   ? `あなたの順位 ${myRankIndex + 1}位 / ${rankingEntries.length}人中`
                   : "この条件ではまだ順位がありません"}
               </div>
-              {top3.map((entry, index) => (
+              {visibleTop3.map((entry, index) => (
                 <div
                   key={entry.key}
                   ref={shouldFocusMe && entry.isCurrentUser ? focusedEntryRef : null}
@@ -900,7 +908,7 @@ export default function RankingBoard() {
                   )}
                 </div>
               ))}
-              {others.map((entry, index) => (
+              {visibleOthers.map((entry, index) => (
                 <div
                   key={entry.key}
                   ref={shouldFocusMe && entry.isCurrentUser ? focusedEntryRef : null}
@@ -916,6 +924,15 @@ export default function RankingBoard() {
                   )}
                 </div>
               ))}
+              {visibleRankingEntries.length < rankingEntries.length && (
+                <button
+                  type="button"
+                  onClick={() => setVisibleCount((current) => current + RANKING_PAGE_SIZE)}
+                  className="w-full rounded-2xl border border-green-100 bg-green-50 px-4 py-3 text-sm font-black text-green-700 active:bg-green-100"
+                >
+                  もっと見る
+                </button>
+              )}
               {rankingMetric === "unitPrice" && PARTICIPATE_UNIT_PRICE_LINK}
             </div>
           )}
@@ -1247,6 +1264,91 @@ function UnitPriceRankingCard({
 }) {
   const offer = entry.offer;
   const rankLabel = offer?.rank ? `${offer.rank}ランク` : "";
+  const serviceLabel = offer?.service ?? "サービス -";
+  const distanceLabel = offer ? `${offer.distanceKm.toLocaleString()}km` : "-";
+  const isMedium = rank === 4 || rank === 5;
+  const isCompact = rank >= 6 && rank <= 10;
+  const isMinimal = rank >= 11;
+
+  if (isMinimal) {
+    return (
+      <button
+        type="button"
+        onClick={onSelect}
+        className="flex w-full items-center justify-between gap-2 rounded-xl border border-gray-100 bg-white px-3 py-2 text-left active:scale-[0.99]"
+      >
+        <div className="flex min-w-0 items-center gap-2">
+          <span className="shrink-0 text-xs font-black text-gray-500">{rank}位</span>
+          <span className="truncate text-sm font-bold text-gray-700">{serviceLabel}</span>
+        </div>
+        <div className="shrink-0 text-sm font-black text-gray-900">
+          {mainMetricValue(entry, "unitPrice")}
+        </div>
+      </button>
+    );
+  }
+
+  if (isCompact) {
+    return (
+      <button
+        type="button"
+        onClick={onSelect}
+        className="block w-full rounded-xl border border-gray-100 bg-white p-2.5 text-left active:scale-[0.99]"
+      >
+        <div className="flex items-center justify-between gap-2">
+          <div className="flex min-w-0 items-center gap-2">
+            <span className="shrink-0 rounded-full bg-gray-100 px-2 py-1 text-xs font-black text-gray-700">
+              {rank}位
+            </span>
+            <span className="truncate text-sm font-black text-gray-900">{serviceLabel}</span>
+          </div>
+          <div className="shrink-0 text-base font-black text-gray-900">
+            {mainMetricValue(entry, "unitPrice")}
+          </div>
+        </div>
+        <div className="mt-1 truncate text-[10px] font-bold text-gray-500">
+          距離 {distanceLabel}
+        </div>
+      </button>
+    );
+  }
+
+  if (isMedium) {
+    return (
+      <button
+        type="button"
+        onClick={onSelect}
+        className="block w-full rounded-2xl border border-gray-100 bg-white p-3 text-left active:scale-[0.99]"
+      >
+        <div className="flex items-start justify-between gap-3">
+          <div className="min-w-0">
+            <div className="flex items-center gap-2">
+              <span className="rounded-full bg-gray-100 px-2 py-1 text-xs font-black text-gray-700">
+                {rank}位
+              </span>
+              {rankLabel && (
+                <span className="rounded-full bg-green-600 px-2 py-0.5 text-[10px] font-bold text-white">
+                  {rankLabel}
+                </span>
+              )}
+            </div>
+            <div className="mt-1 truncate text-sm font-bold text-green-700">
+              {serviceLabel} / 距離 {distanceLabel}
+            </div>
+            <div className="mt-1 truncate text-xs font-bold text-gray-500">
+              共有者: {entry.name}
+            </div>
+          </div>
+          <div className="shrink-0 text-right">
+            <div className="text-xl font-black text-gray-900">
+              {mainMetricValue(entry, "unitPrice")}
+            </div>
+            <div className="text-[10px] font-bold text-green-700">報酬順</div>
+          </div>
+        </div>
+      </button>
+    );
+  }
 
   return (
     <button

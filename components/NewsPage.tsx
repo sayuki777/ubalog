@@ -21,9 +21,11 @@ import {
   type UbalogNewsCategory,
   type UbalogNewsItem,
 } from "@/lib/news";
+import { safeParseJson } from "@/lib/storage";
 
 const RECORDS_STORAGE_KEY = "ubalog-records";
 const PROFILE_STORAGE_KEY = "ubalog-profile";
+const NEWS_PAGE_SIZE = 30;
 
 const tabs: { key: UbalogNewsCategory; label: string }[] = [
   { key: "all", label: "すべて" },
@@ -38,12 +40,8 @@ function loadRecords(): NewsRecord[] {
   const raw = localStorage.getItem(RECORDS_STORAGE_KEY);
   if (!raw) return [];
 
-  try {
-    const parsed = JSON.parse(raw);
-    return Array.isArray(parsed) ? (parsed as NewsRecord[]) : [];
-  } catch {
-    return [];
-  }
+  const parsed = safeParseJson<unknown>(raw, []);
+  return Array.isArray(parsed) ? (parsed as NewsRecord[]) : [];
 }
 
 function newsTime(item: UbalogNewsItem) {
@@ -72,11 +70,7 @@ function normalizeRegion(region?: string) {
 function loadProfile(): NewsProfile {
   const raw = localStorage.getItem(PROFILE_STORAGE_KEY);
   if (!raw) return {};
-  try {
-    return JSON.parse(raw) as NewsProfile;
-  } catch {
-    return {};
-  }
+  return safeParseJson<NewsProfile>(raw, {});
 }
 
 function canShowAreaNews(item: UbalogNewsItem, profile: NewsProfile) {
@@ -134,6 +128,7 @@ export default function NewsPage() {
   const [profile, setProfile] = useState<NewsProfile>({});
   const [message, setMessage] = useState("");
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const [visibleCount, setVisibleCount] = useState(NEWS_PAGE_SIZE);
   const touchStartYRef = useRef<number | null>(null);
 
   const loadPersonal = () => {
@@ -170,6 +165,10 @@ export default function NewsPage() {
     () => filterNews(allItems, activeTab),
     [activeTab, allItems]
   );
+  const visibleItems = useMemo(
+    () => filteredItems.slice(0, visibleCount),
+    [filteredItems, visibleCount]
+  );
   const newsAds = useMemo(() => {
     if (activeTab !== "all" || filteredItems.length < 2 || !shouldShowCustomerAffiliateAds()) {
       return [];
@@ -196,12 +195,18 @@ export default function NewsPage() {
   const handleRefresh = async () => {
     if (isRefreshing) return;
     setIsRefreshing(true);
-    const next = regenerateNewsFromRecords(loadRecords());
-    setPersonalItems(next);
-    const external = await fetchExternalNews();
-    setExternalItems(external);
-    setMessage("ニュースを更新しました");
-    setIsRefreshing(false);
+    try {
+      const next = regenerateNewsFromRecords(loadRecords());
+      setPersonalItems(next);
+      const external = await fetchExternalNews();
+      setExternalItems(external);
+      setVisibleCount(NEWS_PAGE_SIZE);
+      setMessage("ニュースを更新しました");
+    } catch {
+      setMessage("うまく更新できませんでした。少し待ってからお試しください");
+    } finally {
+      setIsRefreshing(false);
+    }
   };
 
   const handleTouchStart = (event: React.TouchEvent<HTMLDivElement>) => {
@@ -220,10 +225,16 @@ export default function NewsPage() {
   };
 
   const handleWeeklySummary = () => {
+    if (isRefreshing) return;
     const item = upsertWeeklySummaryNews(loadRecords());
     loadPersonal();
     setMessage(item ? "週間サマリーを更新しました" : "週間サマリーは記録がある週に表示されます");
   };
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => setVisibleCount(NEWS_PAGE_SIZE), 0);
+    return () => window.clearTimeout(timer);
+  }, [activeTab]);
 
   const handleHideNews = (item: UbalogNewsItem) => {
     if (item.source === "personal") {
@@ -266,7 +277,8 @@ export default function NewsPage() {
             <button
               type="button"
               onClick={handleWeeklySummary}
-              className="h-8 min-w-0 flex-1 truncate rounded-full border border-green-200 bg-green-50 px-3 text-xs font-bold text-green-700"
+              disabled={isRefreshing}
+              className="h-8 min-w-0 flex-1 truncate rounded-full border border-green-200 bg-green-50 px-3 text-xs font-bold text-green-700 disabled:border-gray-200 disabled:text-gray-400"
             >
               週間サマリー
             </button>
@@ -303,27 +315,38 @@ export default function NewsPage() {
               {emptyMessage}
             </div>
           ) : (
-            filteredItems.slice(0, 80).map((item, index) => (
-              <div key={`${item.source}-${item.id}`}>
-                <NewsItemCard
-                  item={item}
-                  isAdmin={isAdmin}
-                  onHide={handleHideNews}
-                />
-                {index === 0 && newsAds[0] && (
-                  <div className="py-2">
-                    <AffiliateMiniAd ad={newsAds[0]} placement="news-all" slot={0} />
-                  </div>
-                )}
-                {activeTab === "personal" &&
-                  personalAd &&
-                  index === Math.min(2, filteredItems.length - 1) && (
-                  <div className="py-2">
-                    <AffiliateMiniAd ad={personalAd} placement="news-personal" slot={0} />
-                  </div>
-                )}
-              </div>
-            ))
+            <>
+              {visibleItems.map((item, index) => (
+                <div key={`${item.source}-${item.id}`}>
+                  <NewsItemCard
+                    item={item}
+                    isAdmin={isAdmin}
+                    onHide={handleHideNews}
+                  />
+                  {index === 0 && newsAds[0] && (
+                    <div className="py-2">
+                      <AffiliateMiniAd ad={newsAds[0]} placement="news-all" slot={0} />
+                    </div>
+                  )}
+                  {activeTab === "personal" &&
+                    personalAd &&
+                    index === Math.min(2, filteredItems.length - 1) && (
+                    <div className="py-2">
+                      <AffiliateMiniAd ad={personalAd} placement="news-personal" slot={0} />
+                    </div>
+                  )}
+                </div>
+              ))}
+              {visibleItems.length < filteredItems.length && (
+                <button
+                  type="button"
+                  onClick={() => setVisibleCount((current) => current + NEWS_PAGE_SIZE)}
+                  className="my-3 w-full rounded-2xl border border-green-100 bg-green-50 px-4 py-3 text-sm font-black text-green-700 active:bg-green-100"
+                >
+                  もっと見る
+                </button>
+              )}
+            </>
           )}
         </section>
 
