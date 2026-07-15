@@ -1,6 +1,6 @@
 ﻿"use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type TouchEvent } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import AffiliateMiniAd from "@/components/AffiliateMiniAd";
@@ -113,7 +113,7 @@ const rankingMetricOptions: {
   { key: "sales", label: "売上", className: "flex-[2]" },
   { key: "hourly", label: "時給", className: "flex-1" },
   { key: "deliveries", label: "件数", className: "flex-1" },
-  { key: "unitPrice", label: "報酬単価", className: "flex-[1.4]" },
+  { key: "unitPrice", label: "単価", className: "flex-1" },
 ];
 
 function toIsoDate(date: Date) {
@@ -546,7 +546,7 @@ function mainMetricValue(entry: RankingEntry, metric: RankingMetricKey) {
 function metricCaption(metric: RankingMetricKey) {
   if (metric === "hourly") return "時給順";
   if (metric === "deliveries") return "件数順";
-  if (metric === "unitPrice") return "報酬単価順";
+  if (metric === "unitPrice") return "単価順";
   return "売上順";
 }
 
@@ -621,6 +621,7 @@ function metricFromQuery(value: string | null): RankingMetricKey {
 export default function RankingBoard() {
   const searchParams = useSearchParams();
   const focusedEntryRef = useRef<HTMLDivElement | null>(null);
+  const swipeStartRef = useRef<{ x: number; y: number } | null>(null);
   const isAdmin = useAdminMode();
   const [records, setRecords] = useState<StoredRecord[]>([]);
   const [realtimeOffers, setRealtimeOffers] = useState<SharedRealtimeOffer[]>([]);
@@ -713,6 +714,38 @@ export default function RankingBoard() {
   const showRankingAd = rankingEntries.length >= 2;
   const shouldFocusMe = focusMode === "me";
 
+  const switchRankingMetric = (direction: 1 | -1) => {
+    const currentIndex = rankingMetricOptions.findIndex(
+      (item) => item.key === rankingMetric
+    );
+    const nextIndex = currentIndex + direction;
+    const next = rankingMetricOptions[nextIndex];
+    if (!next) return;
+    setRankingMetric(next.key);
+  };
+
+  const handleRankingTouchStart = (event: TouchEvent<HTMLElement>) => {
+    const touch = event.touches[0];
+    swipeStartRef.current = { x: touch.clientX, y: touch.clientY };
+  };
+
+  const handleRankingTouchEnd = (event: TouchEvent<HTMLElement>) => {
+    const start = swipeStartRef.current;
+    swipeStartRef.current = null;
+    const touch = event.changedTouches[0];
+    if (!start || !touch) return;
+
+    const diffX = touch.clientX - start.x;
+    const diffY = touch.clientY - start.y;
+    if (Math.abs(diffX) < 50 || Math.abs(diffX) <= Math.abs(diffY)) return;
+
+    if (diffX < 0) {
+      switchRankingMetric(1);
+    } else {
+      switchRankingMetric(-1);
+    }
+  };
+
   const handleHideEntry = (entry: RankingEntry) => {
     const hiddenAt = new Date().toISOString();
     const targetKeys = new Set(entry.records.map(recordHideKey));
@@ -754,71 +787,15 @@ export default function RankingBoard() {
   }, [myRankIndex, shouldFocusMe]);
 
   return (
-    <main className="mx-auto min-h-screen w-full max-w-[430px] bg-gray-50 pb-24">
+    <main className="mx-auto min-h-screen w-full max-w-[430px] overflow-x-hidden bg-gray-50">
       <AppHeader title="ランキング" />
 
-      <div className="px-4 pt-2">
-        <section className="rounded-2xl bg-white px-3 py-3 shadow-sm">
-          <div className="grid grid-cols-3 gap-2">
-            {periodOptions.map((item) => (
-              <button
-                key={item.key}
-                type="button"
-                onClick={() => setPeriod(item.key)}
-                className={`h-9 min-w-0 truncate rounded-full px-2 text-[11px] font-bold ${
-                  period === item.key
-                    ? "bg-green-600 text-white"
-                    : "bg-gray-100 text-gray-600"
-                }`}
-              >
-                {item.label}
-              </button>
-            ))}
-          </div>
-
-          {period === "calendar" && (
-            <input
-              type="date"
-              value={calendarDate}
-              onChange={(e) => setCalendarDate(e.target.value)}
-              className="mt-2 h-10 w-full rounded-xl border border-gray-200 px-3 text-xs font-bold"
-            />
-          )}
-
-          <div className="mt-2 grid grid-cols-3 gap-2">
-            {regionOptions.map((item) => (
-              <button
-                key={item.key}
-                type="button"
-                onClick={() => setRegionFilter(item.key)}
-                className={`h-9 min-w-0 truncate rounded-full px-2 text-[11px] font-bold ${
-                  regionFilter === item.key
-                    ? "bg-green-600 text-white"
-                    : "bg-gray-100 text-gray-600"
-                }`}
-              >
-                {item.label}
-              </button>
-            ))}
-          </div>
-
-          {regionFilter === "都道府県別" && (
-            <select
-              value={prefectureFilter}
-              onChange={(e) => setPrefectureFilter(e.target.value)}
-              className="mt-2 h-10 w-full rounded-xl border border-gray-200 bg-white px-3 text-xs font-bold"
-            >
-              <option value="">都道府県を選択</option>
-              {PREFECTURES.map((prefecture) => (
-                <option key={prefecture} value={prefecture}>
-                  {prefecture}
-                </option>
-              ))}
-            </select>
-          )}
-        </section>
-
-        <section className="mt-3 rounded-2xl bg-white p-3 shadow-sm">
+      <div className="px-4 pb-64 pt-2">
+        <section
+          className="rounded-2xl bg-white p-3 shadow-sm [touch-action:pan-y]"
+          onTouchStart={handleRankingTouchStart}
+          onTouchEnd={handleRankingTouchEnd}
+        >
           <div className="mb-3 flex rounded-2xl bg-gray-100 p-1">
             {rankingMetricOptions.map((item) => (
               <button
@@ -907,6 +884,68 @@ export default function RankingBoard() {
           )}
         </section>
       </div>
+
+      <section className="fixed bottom-[calc(4rem+env(safe-area-inset-bottom))] left-1/2 z-40 w-full max-w-[430px] -translate-x-1/2 px-3">
+        <div className="rounded-2xl border border-gray-100 bg-white/95 p-2 shadow-[0_-8px_24px_rgba(15,23,42,0.12)] backdrop-blur">
+          <div className="grid grid-cols-6 gap-1">
+            {periodOptions.map((item) => (
+              <button
+                key={item.key}
+                type="button"
+                onClick={() => setPeriod(item.key)}
+                className={`h-8 min-w-0 truncate rounded-full px-1 text-[10px] font-black leading-none ${
+                  period === item.key
+                    ? "bg-green-600 text-white"
+                    : "bg-gray-100 text-gray-600"
+                }`}
+              >
+                {item.label}
+              </button>
+            ))}
+          </div>
+
+          {period === "calendar" && (
+            <input
+              type="date"
+              value={calendarDate}
+              onChange={(e) => setCalendarDate(e.target.value)}
+              className="mt-2 h-9 w-full rounded-xl border border-gray-200 bg-white px-3 text-xs font-bold"
+            />
+          )}
+
+          <div className="mt-2 grid grid-cols-6 gap-1">
+            {regionOptions.map((item) => (
+              <button
+                key={item.key}
+                type="button"
+                onClick={() => setRegionFilter(item.key)}
+                className={`h-8 min-w-0 truncate rounded-full px-1 text-[10px] font-black leading-none ${
+                  regionFilter === item.key
+                    ? "bg-green-600 text-white"
+                    : "bg-gray-100 text-gray-600"
+                }`}
+              >
+                {item.label}
+              </button>
+            ))}
+          </div>
+
+          {regionFilter === "都道府県別" && (
+            <select
+              value={prefectureFilter}
+              onChange={(e) => setPrefectureFilter(e.target.value)}
+              className="mt-2 h-9 w-full rounded-xl border border-gray-200 bg-white px-3 text-xs font-bold"
+            >
+              <option value="">都道府県を選択</option>
+              {PREFECTURES.map((prefecture) => (
+                <option key={prefecture} value={prefecture}>
+                  {prefecture}
+                </option>
+              ))}
+            </select>
+          )}
+        </div>
+      </section>
 
       <BottomMenu />
       {selectedEntry && (
