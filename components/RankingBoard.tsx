@@ -885,15 +885,15 @@ export default function RankingBoard() {
         </section>
       </div>
 
-      <section className="fixed bottom-[calc(4rem+env(safe-area-inset-bottom))] left-1/2 z-40 w-full max-w-[430px] -translate-x-1/2 px-3">
-        <div className="rounded-2xl border border-gray-100 bg-white/95 p-2 shadow-[0_-8px_24px_rgba(15,23,42,0.12)] backdrop-blur">
-          <div className="grid grid-cols-6 gap-1">
+      <section className="fixed bottom-[calc(4rem+env(safe-area-inset-bottom))] left-1/2 z-40 w-full max-w-[430px] -translate-x-1/2 px-4">
+        <div className="rounded-2xl border border-gray-100 bg-white/95 px-3 py-3 shadow-[0_-8px_24px_rgba(15,23,42,0.12)] backdrop-blur">
+          <div className="flex gap-1.5 overflow-x-auto pb-0.5">
             {periodOptions.map((item) => (
               <button
                 key={item.key}
                 type="button"
                 onClick={() => setPeriod(item.key)}
-                className={`h-8 min-w-0 truncate rounded-full px-1 text-[10px] font-black leading-none ${
+                className={`h-9 shrink-0 rounded-full px-3 text-[11px] font-bold ${
                   period === item.key
                     ? "bg-green-600 text-white"
                     : "bg-gray-100 text-gray-600"
@@ -909,17 +909,17 @@ export default function RankingBoard() {
               type="date"
               value={calendarDate}
               onChange={(e) => setCalendarDate(e.target.value)}
-              className="mt-2 h-9 w-full rounded-xl border border-gray-200 bg-white px-3 text-xs font-bold"
+              className="mt-2 h-10 w-full rounded-xl border border-gray-200 bg-white px-3 text-xs font-bold"
             />
           )}
 
-          <div className="mt-2 grid grid-cols-6 gap-1">
+          <div className="mt-2 flex gap-1.5 overflow-x-auto pb-0.5">
             {regionOptions.map((item) => (
               <button
                 key={item.key}
                 type="button"
                 onClick={() => setRegionFilter(item.key)}
-                className={`h-8 min-w-0 truncate rounded-full px-1 text-[10px] font-black leading-none ${
+                className={`h-9 shrink-0 rounded-full px-3 text-[11px] font-bold ${
                   regionFilter === item.key
                     ? "bg-green-600 text-white"
                     : "bg-gray-100 text-gray-600"
@@ -934,7 +934,7 @@ export default function RankingBoard() {
             <select
               value={prefectureFilter}
               onChange={(e) => setPrefectureFilter(e.target.value)}
-              className="mt-2 h-9 w-full rounded-xl border border-gray-200 bg-white px-3 text-xs font-bold"
+              className="mt-2 h-10 w-full rounded-xl border border-gray-200 bg-white px-3 text-xs font-bold"
             >
               <option value="">都道府県を選択</option>
               {PREFECTURES.map((prefecture) => (
