@@ -52,6 +52,7 @@ type StoredRecord = {
   ranking?: boolean;
   hourly?: number;
   workMinutes?: number;
+  hidden?: boolean;
   services?: Partial<Record<ServiceKey, { amount?: number; deliveries?: number }>>;
 };
 
@@ -94,7 +95,7 @@ const menuCards = [
   {
     href: "/recruit",
     title: "配達員募集",
-    desc: "特典やキャンペーンを見る",
+    desc: "登録リンクを見る",
     icon: "🎁",
   },
   {
@@ -263,12 +264,23 @@ export default function HomeDashboard() {
   const today = todayIsoDate();
   const yesterday = yesterdayIsoDate();
   const thisWeek = weekRange(0);
-  const lastWeek = weekRange(-1);
+  const currentMonth = today.slice(0, 7);
+
+  const todayRecord = useMemo(() => {
+    return records.find((item) => item.date === today) ?? null;
+  }, [records, today]);
 
   const todayTotal = useMemo(() => {
-    const record = records.find((item) => item.date === today);
-    return record?.total ?? 0;
-  }, [records, today]);
+    return todayRecord?.total ?? 0;
+  }, [todayRecord]);
+
+  const todayDeliveries = useMemo(() => {
+    return todayRecord ? totalDeliveries(todayRecord) : 0;
+  }, [todayRecord]);
+
+  const todayHourly = useMemo(() => {
+    return todayRecord ? hourlyValue(todayRecord) : 0;
+  }, [todayRecord]);
 
   const thisWeekTotal = useMemo(() => {
     return records
@@ -276,16 +288,21 @@ export default function HomeDashboard() {
       .reduce((sum, item) => sum + item.total, 0);
   }, [records, thisWeek.end, thisWeek.start]);
 
-  const lastWeekTotal = useMemo(() => {
-    return records
-      .filter((item) => item.date >= lastWeek.start && item.date <= lastWeek.end)
-      .reduce((sum, item) => sum + item.total, 0);
-  }, [lastWeek.end, lastWeek.start, records]);
+  const monthRecords = useMemo(() => {
+    return records.filter((item) => item.date.startsWith(currentMonth));
+  }, [currentMonth, records]);
 
-  const yesterdayTotal = useMemo(() => {
-    const record = records.find((item) => item.date === yesterday);
-    return record?.total ?? 0;
-  }, [records, yesterday]);
+  const monthTotal = useMemo(() => {
+    return monthRecords.reduce((sum, item) => sum + item.total, 0);
+  }, [monthRecords]);
+
+  const monthActiveDays = useMemo(() => {
+    return new Set(
+      monthRecords
+        .filter((item) => item.total > 0 || totalDeliveries(item) > 0)
+        .map((item) => item.date)
+    ).size;
+  }, [monthRecords]);
 
   const yesterdayTop3 = useMemo(() => {
     return records
@@ -325,7 +342,7 @@ export default function HomeDashboard() {
   };
 
   return (
-    <main className="mx-auto min-h-screen w-full max-w-[430px] bg-gray-50 pb-24">
+    <main className="mx-auto min-h-screen w-full max-w-[430px] overflow-x-hidden bg-gray-50 pb-24">
       <AppHeader />
 
       <div className="px-4 pb-[calc(8rem+env(safe-area-inset-bottom))] pt-4">
@@ -333,35 +350,25 @@ export default function HomeDashboard() {
 
         <BeginnerGuide />
 
-        <section className="rounded-2xl bg-white p-4 shadow-sm">
-          <div className="grid grid-cols-2 gap-3">
-            <SummaryCard
-              title="先週"
-              value={lastWeekTotal}
-              subTitle="今週"
-              subValue={thisWeekTotal}
-              goal={weeklyGoal}
-              highlight={hasHighlight("lastWeek", highlight)}
-            />
-            <SummaryCard
-              title="前日"
-              value={yesterdayTotal}
-              subTitle="今日"
-              subValue={todayTotal}
-              goal={todayGoal}
-              highlight={hasHighlight("yesterday", highlight)}
-              subHighlight={hasTodayHighlight}
-            />
-          </div>
-        </section>
-
-        {records.length === 0 && <WelcomeGuideCard />}
-
         <FirstStepGuide
           recordsCount={records.length}
           onboardingDismissed={onboardingDismissed}
           onDismissOnboarding={dismissOnboarding}
         />
+
+        <TodaySummarySection
+          todayTotal={todayTotal}
+          todayDeliveries={todayDeliveries}
+          todayHourly={todayHourly}
+          todayGoal={todayGoal}
+          todayHighlight={hasTodayHighlight}
+          thisWeekTotal={thisWeekTotal}
+          weeklyGoal={weeklyGoal}
+          monthTotal={monthTotal}
+          monthActiveDays={monthActiveDays}
+        />
+
+        {records.length === 0 && onboardingDismissed && <WelcomeGuideCard />}
 
         <section className="mt-4 rounded-2xl bg-white p-4 shadow-sm">
           <div className="text-base font-bold text-gray-900">前日のランキング TOP3</div>
@@ -426,23 +433,27 @@ export default function HomeDashboard() {
 
         <PersonalDashboard />
 
-        <section className="mt-4 space-y-3">
+        <section className="mt-4 rounded-2xl bg-white p-4 shadow-sm">
+          <div className="text-sm font-black text-gray-900">よく使う</div>
+          <div className="mt-3 grid grid-cols-2 gap-2">
           {menuCards.map((card) => (
             <Link
               key={card.href}
               href={card.href}
-              className="block rounded-2xl bg-white p-4 shadow-sm"
+              className="min-w-0 rounded-xl bg-gray-50 p-3 active:bg-green-50"
             >
-              <div className="flex items-center gap-3">
-                <div className="text-2xl">{card.icon}</div>
-                <div className="flex-1">
-                  <div className="font-bold text-gray-900">{card.title}</div>
-                  <div className="mt-1 text-sm text-gray-500">{card.desc}</div>
+              <div className="flex min-w-0 items-center gap-2">
+                <div className="text-lg">{card.icon}</div>
+                <div className="min-w-0 flex-1">
+                  <div className="truncate text-xs font-black text-gray-900">{card.title}</div>
+                  <div className="mt-0.5 truncate text-[10px] font-bold text-gray-500">
+                    {card.desc}
+                  </div>
                 </div>
-                <div className="text-gray-400">›</div>
               </div>
             </Link>
           ))}
+          </div>
         </section>
 
         {showRecruitGuide && (
@@ -462,6 +473,8 @@ export default function HomeDashboard() {
           </Link>
         )}
 
+        <AppInstallGuide />
+
         <section className="mt-4 rounded-2xl bg-white p-4 shadow-sm">
           <div className="flex min-w-0 items-center justify-between gap-3">
             <div className="min-w-0">
@@ -480,13 +493,112 @@ export default function HomeDashboard() {
           </div>
         </section>
 
-        <AppInstallGuide />
-
         <FooterLinks />
       </div>
 
       <BottomMenu />
     </main>
+  );
+}
+
+function TodaySummarySection({
+  todayTotal,
+  todayDeliveries,
+  todayHourly,
+  todayGoal,
+  todayHighlight,
+  thisWeekTotal,
+  weeklyGoal,
+  monthTotal,
+  monthActiveDays,
+}: {
+  todayTotal: number;
+  todayDeliveries: number;
+  todayHourly: number;
+  todayGoal: number;
+  todayHighlight: boolean;
+  thisWeekTotal: number;
+  weeklyGoal: number;
+  monthTotal: number;
+  monthActiveDays: number;
+}) {
+  const hasTodayRecord = todayTotal > 0 || todayDeliveries > 0 || todayHourly > 0;
+
+  return (
+    <section className="mt-4 rounded-2xl bg-white p-4 shadow-sm">
+      <div className="flex items-center justify-between gap-2">
+        <div>
+          <div className="text-base font-black text-gray-900">今日のサマリー</div>
+          <div className="mt-0.5 text-xs font-bold text-gray-500">
+            記録するとランキングや月間集計に反映されます
+          </div>
+        </div>
+        {todayHighlight && <NewBadge />}
+      </div>
+
+      {hasTodayRecord ? (
+        <>
+          <div className="mt-3 grid grid-cols-3 gap-2">
+            <MiniMetric label="売上" value={`￥${todayTotal.toLocaleString()}`} />
+            <MiniMetric label="件数" value={`${todayDeliveries.toLocaleString()}件`} />
+            <MiniMetric
+              label="時給"
+              value={todayHourly > 0 ? `￥${todayHourly.toLocaleString()}` : "-"}
+            />
+          </div>
+          {todayGoal > 0 && (
+            <div className="mt-3 flex items-center justify-between rounded-xl bg-green-50 px-3 py-2 text-xs font-black text-green-700">
+              <span>今日の目標</span>
+              <span>￥{todayGoal.toLocaleString()}</span>
+            </div>
+          )}
+        </>
+      ) : (
+        <div className="mt-3 rounded-2xl bg-green-50 px-3 py-3">
+          <div className="text-sm font-black text-green-800">まずは今日の記録から</div>
+          <div className="mt-1 text-xs font-bold leading-5 text-green-700">
+            金額だけでも保存できます。件数や稼働時間を入れると振り返りやすくなります。
+          </div>
+          <Link
+            href="/record"
+            className="mt-3 inline-flex rounded-full bg-green-600 px-4 py-2 text-xs font-black text-white active:bg-green-700"
+          >
+            今日の記録をする
+          </Link>
+        </div>
+      )}
+
+      <div className="mt-3 grid grid-cols-2 gap-2">
+        <MiniMetric
+          label="今週"
+          value={`￥${thisWeekTotal.toLocaleString()}`}
+          note={weeklyGoal > 0 ? `目標 ￥${weeklyGoal.toLocaleString()}` : undefined}
+        />
+        <MiniMetric
+          label="今月"
+          value={`￥${monthTotal.toLocaleString()}`}
+          note={`${monthActiveDays.toLocaleString()}日記録`}
+        />
+      </div>
+    </section>
+  );
+}
+
+function MiniMetric({
+  label,
+  value,
+  note,
+}: {
+  label: string;
+  value: string;
+  note?: string;
+}) {
+  return (
+    <div className="min-w-0 rounded-2xl bg-gray-50 px-3 py-3">
+      <div className="truncate text-[11px] font-black text-gray-500">{label}</div>
+      <div className="mt-1 truncate text-lg font-black text-gray-900">{value}</div>
+      {note && <div className="mt-1 truncate text-[10px] font-bold text-green-700">{note}</div>}
+    </div>
   );
 }
 
@@ -520,46 +632,5 @@ function NewBadge() {
     <span className="rounded-full bg-pink-100 px-1.5 py-0.5 text-[9px] font-black text-pink-600">
       NEW! ✨
     </span>
-  );
-}
-
-function SummaryCard({
-  title,
-  value,
-  subTitle,
-  subValue,
-  goal,
-  highlight,
-  subHighlight,
-}: {
-  title: string;
-  value: number;
-  subTitle: string;
-  subValue: number;
-  goal: number;
-  highlight: boolean;
-  subHighlight?: boolean;
-}) {
-  return (
-    <div className="rounded-2xl bg-gray-50 px-3 py-3">
-      <div className="flex items-center justify-between gap-2">
-        <div className="text-xs font-bold text-gray-500">{title}</div>
-        {highlight && <NewBadge />}
-      </div>
-      <div className="mt-1 text-2xl font-black text-gray-900">￥{value.toLocaleString()}</div>
-      <div className="mt-2 flex items-center justify-between gap-2 text-[11px] font-bold text-gray-500">
-        <span>{subTitle}</span>
-        <span className="flex min-w-0 items-center justify-end gap-1">
-          <span>￥{subValue.toLocaleString()}</span>
-          {subHighlight && <NewBadge />}
-        </span>
-      </div>
-      {goal > 0 && (
-        <div className="mt-1 flex items-center justify-between text-[10px] font-bold text-green-700">
-          <span>目標</span>
-          <span>￥{goal.toLocaleString()}</span>
-        </div>
-      )}
-    </div>
   );
 }

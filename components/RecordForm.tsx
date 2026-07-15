@@ -633,11 +633,7 @@ export default function RecordForm() {
     } else {
       setToastMessage(isEditing ? "更新しました" : "保存しました");
     }
-    setAfterSaveMessage(
-      isFirstRecordSave
-        ? "記録しました！マイページで確認できます"
-        : "記録しました。マイページで確認できます"
-    );
+    setAfterSaveMessage(isFirstRecordSave ? "記録しました！" : "記録しました");
     setLastSavedRecord(newRecord);
     setShowAfterSaveActions(true);
     setSaving(true);
@@ -652,7 +648,7 @@ export default function RecordForm() {
   if (!loaded) return null;
 
   return (
-    <main className="mx-auto min-h-screen w-full max-w-[430px] bg-gray-50 pb-24">
+    <main className="mx-auto min-h-screen w-full max-w-[430px] overflow-x-hidden bg-gray-50 pb-24">
       <AppHeader />
       <Toast
         message={toastMessage || (isEditing ? "更新しました" : "保存しました")}
@@ -866,6 +862,14 @@ export default function RecordForm() {
         {showAfterSaveActions && (
           <section className="mt-4 rounded-2xl border border-green-100 bg-white p-4 shadow-sm">
             <div className="text-sm font-black text-gray-900">{afterSaveMessage}</div>
+            {lastSavedRecord && (
+              <div className="mt-2 rounded-xl bg-green-50 px-3 py-2 text-xs font-black text-green-800">
+                売上 {formatCurrency(lastSavedRecord.total)} / {totalDeliveries(lastSavedRecord)}件
+              </div>
+            )}
+            <div className="mt-2 text-xs font-bold text-gray-500">
+              ランキングへ移動します
+            </div>
             <div className="mt-3 grid grid-cols-3 gap-2">
               <button
                 type="button"
@@ -877,7 +881,7 @@ export default function RecordForm() {
                 Xでシェア
               </button>
               <Link
-                href="/ranking"
+                href={lastSavedRecord ? rankingUrlForDate(lastSavedRecord.date) : "/ranking"}
                 className="rounded-xl bg-green-600 px-3 py-2 text-center text-xs font-black text-white"
               >
                 ランキングを見る
@@ -886,7 +890,7 @@ export default function RecordForm() {
                 href="/"
                 className="rounded-xl border border-green-200 px-2 py-2 text-center text-xs font-black text-green-700"
               >
-                目標を作る
+                マイページ
               </Link>
             </div>
           </section>
