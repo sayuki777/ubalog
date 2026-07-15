@@ -29,6 +29,10 @@ export type SharedRecord = {
   createdAt?: string;
   updatedAt?: string;
   deviceId?: string;
+  firestoreId?: string;
+  hidden?: boolean;
+  hiddenAt?: string;
+  hiddenReason?: string;
 };
 
 function safeJsonParse<T>(raw: string | null, fallback: T): T {
@@ -53,7 +57,7 @@ function clampNumber(value: unknown, min: number, max: number) {
 
 function trimText(value: unknown, maxLength: number) {
   if (typeof value !== "string") return undefined;
-  const trimmed = value.trim();
+  const trimmed = value.replace(/[\r\n\t]+/g, " ").trim();
   if (!trimmed) return undefined;
   return trimmed.slice(0, maxLength);
 }
@@ -107,6 +111,10 @@ export function sanitizeSharedRecord(record: SharedRecord, withDeviceId = false)
     services: sanitizeServices(record),
     createdAt: trimText(record.createdAt, 40),
     updatedAt: trimText(record.updatedAt, 40),
+    firestoreId: trimText(record.firestoreId, 120),
+    hidden: record.hidden === true ? true : undefined,
+    hiddenAt: trimText(record.hiddenAt, 40),
+    hiddenReason: trimText(record.hiddenReason, 80),
   }) as SharedRecord;
 
   return next;
@@ -147,9 +155,31 @@ export async function fetchSharedRecords() {
 
   try {
     const snapshot = await getDocs(collection(db, SHARED_RECORDS_COLLECTION));
-    return snapshot.docs.map((item) => item.data() as SharedRecord);
+    return snapshot.docs
+      .map((item) => ({ ...(item.data() as SharedRecord), firestoreId: item.id }))
+      .filter((record) => record.hidden !== true);
   } catch {
     return [];
+  }
+}
+
+export async function hideSharedRecord(record: SharedRecord, reason = "admin-hide") {
+  if (!db) return;
+  const sanitized = sanitizeSharedRecord({
+    ...record,
+    hidden: true,
+    hiddenAt: new Date().toISOString(),
+    hiddenReason: reason,
+  });
+  if (!sanitized) return;
+
+  const targetId = record.firestoreId || recordDocId(sanitized);
+  try {
+    await setDoc(doc(db, SHARED_RECORDS_COLLECTION, targetId), sanitized, {
+      merge: true,
+    });
+  } catch {
+    // Firestore is best-effort. The local hidden state still removes it here.
   }
 }
 
@@ -159,7 +189,7 @@ export async function upsertSharedRecord(record: SharedRecord) {
   if (now - lastRecordWriteAt < RECORD_WRITE_GUARD_MS) return;
 
   const next = sanitizeSharedRecord(record, true);
-  if (!next) return;
+  if (!next || next.hidden === true) return;
   lastRecordWriteAt = now;
   try {
     await setDoc(doc(db, SHARED_RECORDS_COLLECTION, recordDocId(next)), next, {
@@ -198,12 +228,14 @@ export function mergeRecords(
   for (const record of remoteRecords) {
     const sanitized = sanitizeSharedRecord(record);
     if (!sanitized) continue;
+    if (sanitized.hidden === true) continue;
     const key = mergeKey(sanitized);
     merged.set(key, chooseNewerRecord(merged.get(key), sanitized));
   }
   for (const record of localRecords) {
     const sanitized = sanitizeSharedRecord(record);
     if (!sanitized) continue;
+    if (sanitized.hidden === true) continue;
     const key = mergeKey(sanitized);
     merged.set(key, chooseNewerRecord(merged.get(key), sanitized));
   }

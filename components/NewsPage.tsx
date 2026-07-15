@@ -5,6 +5,7 @@ import AffiliateMiniAd from "@/components/AffiliateMiniAd";
 import AppHeader from "@/components/AppHeader";
 import BottomMenu from "@/components/BottomMenu";
 import NewsItemCard from "@/components/NewsItemCard";
+import { useAdminMode } from "@/lib/admin";
 import { pickAffiliateAd, shouldShowCustomerAffiliateAds } from "@/lib/affiliateAds";
 import {
   fetchExternalNews,
@@ -13,6 +14,7 @@ import {
 } from "@/lib/externalNews";
 import {
   getNewsItems,
+  hideNewsItem,
   regenerateNewsFromRecords,
   upsertWeeklySummaryNews,
   type NewsRecord,
@@ -50,7 +52,10 @@ function newsTime(item: UbalogNewsItem) {
 
 function mergeNews(personal: UbalogNewsItem[], external: UbalogNewsItem[]) {
   const map = new Map<string, UbalogNewsItem>();
-  for (const item of [...personal, ...external]) map.set(item.id, item);
+  for (const item of [...personal, ...external]) {
+    if (item.hidden === true) continue;
+    map.set(item.id, item);
+  }
   return [...map.values()].sort((a, b) => newsTime(b) - newsTime(a));
 }
 
@@ -122,6 +127,7 @@ function filterNews(items: UbalogNewsItem[], activeTab: UbalogNewsCategory) {
 }
 
 export default function NewsPage() {
+  const isAdmin = useAdminMode();
   const [personalItems, setPersonalItems] = useState<UbalogNewsItem[]>([]);
   const [externalItems, setExternalItems] = useState<UbalogNewsItem[]>([]);
   const [activeTab, setActiveTab] = useState<UbalogNewsCategory>("all");
@@ -202,6 +208,16 @@ export default function NewsPage() {
     setMessage(item ? "週間サマリーを更新しました" : "週間サマリーは記録がある週に表示されます");
   };
 
+  const handleHideNews = (item: UbalogNewsItem) => {
+    if (item.source === "personal") {
+      hideNewsItem(item.id);
+      setPersonalItems((current) => current.filter((news) => news.id !== item.id));
+      loadPersonal();
+      return;
+    }
+    setExternalItems((current) => current.filter((news) => news.id !== item.id));
+  };
+
   const emptyMessage =
     activeTab === "external"
       ? "外部ニュースは取得でき次第表示されます"
@@ -268,7 +284,11 @@ export default function NewsPage() {
           ) : (
             filteredItems.slice(0, 80).map((item, index) => (
               <div key={`${item.source}-${item.id}`}>
-                <NewsItemCard item={item} />
+                <NewsItemCard
+                  item={item}
+                  isAdmin={isAdmin}
+                  onHide={handleHideNews}
+                />
                 {index === 0 && newsAds[0] && (
                   <div className="py-2">
                     <AffiliateMiniAd ad={newsAds[0]} placement="news-all" slot={0} />

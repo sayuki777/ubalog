@@ -60,6 +60,9 @@ export type UbalogNewsItem = {
   publishedAt: string;
   recordDate?: string;
   offerId?: string;
+  hidden?: boolean;
+  hiddenAt?: string;
+  hiddenReason?: string;
   periodStart?: string;
   periodEnd?: string;
   areaScope?: NewsAreaScope;
@@ -311,6 +314,9 @@ function normalizeNewsItem(item: unknown): UbalogNewsItem | null {
     publishedAt: typeof raw.publishedAt === "string" ? raw.publishedAt : createdAt,
     recordDate,
     offerId: typeof raw.offerId === "string" ? raw.offerId : undefined,
+    hidden: raw.hidden === true ? true : undefined,
+    hiddenAt: typeof raw.hiddenAt === "string" ? raw.hiddenAt : undefined,
+    hiddenReason: typeof raw.hiddenReason === "string" ? raw.hiddenReason : undefined,
     periodStart: typeof raw.periodStart === "string" ? raw.periodStart : undefined,
     periodEnd: typeof raw.periodEnd === "string" ? raw.periodEnd : undefined,
     areaScope: raw.areaScope,
@@ -333,6 +339,7 @@ export function getNewsItems(): UbalogNewsItem[] {
     return parsed
       .map(normalizeNewsItem)
       .filter((item): item is UbalogNewsItem => Boolean(item))
+      .filter((item) => item.hidden !== true)
       .sort((a, b) => publishedTime(b) - publishedTime(a))
       .slice(0, MAX_NEWS_ITEMS);
   } catch {
@@ -347,6 +354,31 @@ export function saveNewsItems(items: UbalogNewsItem[]) {
     .slice(0, MAX_NEWS_ITEMS);
   localStorage.setItem(NEWS_STORAGE_KEY, JSON.stringify(normalized));
   window.dispatchEvent(new Event(NEWS_UPDATED_EVENT));
+}
+
+export function hideNewsItem(id: string, reason = "admin-hide") {
+  if (typeof window === "undefined") return;
+  const raw = localStorage.getItem(NEWS_STORAGE_KEY);
+  if (!raw) return;
+
+  try {
+    const parsed = JSON.parse(raw);
+    if (!Array.isArray(parsed)) return;
+    const hiddenAt = new Date().toISOString();
+    const next = parsed.map((item) =>
+      item && typeof item === "object" && (item as UbalogNewsItem).id === id
+        ? {
+            ...item,
+            hidden: true,
+            hiddenAt,
+            hiddenReason: reason,
+          }
+        : item
+    );
+    saveNewsItems(next as UbalogNewsItem[]);
+  } catch {
+    // Ignore malformed local news. The app can regenerate news later.
+  }
 }
 
 export function addNewsItem(item: UbalogNewsItem) {

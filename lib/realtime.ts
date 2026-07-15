@@ -25,6 +25,9 @@ export type SharedRealtimeOffer = {
   lat?: number;
   lng?: number;
   deviceId?: string;
+  hidden?: boolean;
+  hiddenAt?: string;
+  hiddenReason?: string;
   [key: string]: unknown;
 };
 
@@ -59,7 +62,7 @@ function clampNumber(value: unknown, min: number, max: number) {
 
 function trimText(value: unknown, maxLength: number) {
   if (typeof value !== "string") return undefined;
-  const trimmed = value.trim();
+  const trimmed = value.replace(/[\r\n\t]+/g, " ").trim();
   if (!trimmed) return undefined;
   return trimmed.slice(0, maxLength);
 }
@@ -102,7 +105,7 @@ export function sanitizeRealtimeOffer(offer: SharedRealtimeOffer) {
     deviceId: trimText(offer.deviceId, 80) || getDeviceId(),
     createdAt: trimText(offer.createdAt, 40) || new Date().toISOString(),
     name: trimText(offer.name, 20),
-    area: trimText(offer.area, 30) || "",
+    area: trimText(offer.area, 40) || "",
     service: offer.service,
     amount: Math.round(amount),
     distanceKm: Math.round(distanceKm * 10) / 10,
@@ -111,6 +114,9 @@ export function sanitizeRealtimeOffer(offer: SharedRealtimeOffer) {
     comment: trimText(offer.comment, 80) || "",
     shopName: trimText(offer.shopName, 40),
     dropoffArea: trimText(offer.dropoffArea, 40),
+    hidden: offer.hidden === true ? true : undefined,
+    hiddenAt: trimText(offer.hiddenAt, 40),
+    hiddenReason: trimText(offer.hiddenReason, 80),
     lat,
     lng,
   }) as SharedRealtimeOffer;
@@ -121,7 +127,9 @@ export async function fetchSharedRealtimeOffers() {
 
   try {
     const snapshot = await getDocs(collection(db, REALTIME_OFFERS_COLLECTION));
-    return snapshot.docs.map((item) => item.data() as SharedRealtimeOffer);
+    return snapshot.docs
+      .map((item) => item.data() as SharedRealtimeOffer)
+      .filter((offer) => offer.hidden !== true);
   } catch {
     return [];
   }
@@ -130,7 +138,7 @@ export async function fetchSharedRealtimeOffers() {
 export async function upsertSharedRealtimeOffer(offer: SharedRealtimeOffer) {
   if (!db) return;
   const sanitized = sanitizeRealtimeOffer(offer);
-  if (!sanitized) return;
+  if (!sanitized || sanitized.hidden === true) return;
 
   try {
     await setDoc(doc(db, REALTIME_OFFERS_COLLECTION, sanitized.id), sanitized, {
@@ -138,6 +146,24 @@ export async function upsertSharedRealtimeOffer(offer: SharedRealtimeOffer) {
     });
   } catch {
     // Firestore is best-effort. localStorage keeps the posted offer on this device.
+  }
+}
+
+export async function hideSharedRealtimeOffer(id: string, reason = "admin-hide") {
+  if (!db) return;
+
+  try {
+    await setDoc(
+      doc(db, REALTIME_OFFERS_COLLECTION, id),
+      {
+        hidden: true,
+        hiddenAt: new Date().toISOString(),
+        hiddenReason: reason,
+      },
+      { merge: true }
+    );
+  } catch {
+    // Firestore is best-effort. The local hidden state still removes it here.
   }
 }
 
@@ -159,7 +185,7 @@ export function mergeRealtimeOffers(
   const softKeys = new Set<string>();
   for (const offer of [...remoteOffers, ...localOffers]) {
     const sanitized = sanitizeRealtimeOffer(offer);
-    if (!sanitized) continue;
+    if (!sanitized || sanitized.hidden === true) continue;
     const createdAtMs = new Date(sanitized.createdAt).getTime() || 0;
     const softKey = [
       sanitized.service,

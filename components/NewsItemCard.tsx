@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useState } from "react";
 import type { UbalogNewsItem } from "@/lib/news";
 
 function iconContent(iconType: UbalogNewsItem["iconType"]) {
@@ -126,12 +127,66 @@ function Body({ item }: { item: UbalogNewsItem }) {
   );
 }
 
-export default function NewsItemCard({ item }: { item: UbalogNewsItem }) {
+function AdminHideNewsButton({ onHide }: { onHide: () => void }) {
+  const [confirming, setConfirming] = useState(false);
+
+  if (confirming) {
+    return (
+      <div className="mb-2 rounded-xl border border-red-100 bg-red-50 px-3 py-2">
+        <div className="text-xs font-bold text-red-700">このニュースを非表示にしますか？</div>
+        <div className="mt-2 flex gap-2">
+          <button
+            type="button"
+            onClick={() => setConfirming(false)}
+            className="h-8 flex-1 rounded-lg bg-white text-xs font-bold text-gray-600 ring-1 ring-gray-200"
+          >
+            キャンセル
+          </button>
+          <button
+            type="button"
+            onClick={onHide}
+            className="h-8 flex-1 rounded-lg bg-red-600 text-xs font-bold text-white"
+          >
+            非表示
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="mb-2 flex justify-end">
+      <button
+        type="button"
+        onClick={() => setConfirming(true)}
+        className="rounded-full bg-red-50 px-3 py-1.5 text-xs font-bold text-red-600 ring-1 ring-red-100"
+      >
+        非表示
+      </button>
+    </div>
+  );
+}
+
+export default function NewsItemCard({
+  item,
+  isAdmin = false,
+  onHide,
+}: {
+  item: UbalogNewsItem;
+  isAdmin?: boolean;
+  onHide?: (item: UbalogNewsItem) => void;
+}) {
+  const adminButton =
+    isAdmin && onHide ? <AdminHideNewsButton onHide={() => onHide(item)} /> : null;
+
   if (item.source === "external" && item.url) {
     return (
-      <a href={item.url} target="_blank" rel="noopener noreferrer" className="block">
-        <Body item={item} />
-      </a>
+      <div>
+        <a href={item.url} target="_blank" rel="noopener noreferrer" className="block">
+          <Body item={item} />
+        </a>
+        {adminButton}
+      </div>
     );
   }
 
@@ -141,19 +196,30 @@ export default function NewsItemCard({ item }: { item: UbalogNewsItem }) {
       : "/realtime";
 
     return (
-      <Link href={href} className="block">
-        <Body item={item} />
-      </Link>
+      <div>
+        <Link href={href} className="block">
+          <Body item={item} />
+        </Link>
+        {adminButton}
+      </div>
     );
   }
 
   if (item.recordDate) {
     return (
-      <Link href={`/record?date=${item.recordDate}`} className="block">
-        <Body item={item} />
-      </Link>
+      <div>
+        <Link href={`/record?date=${item.recordDate}`} className="block">
+          <Body item={item} />
+        </Link>
+        {adminButton}
+      </div>
     );
   }
 
-  return <Body item={item} />;
+  return (
+    <div>
+      <Body item={item} />
+      {adminButton}
+    </div>
+  );
 }

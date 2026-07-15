@@ -6,6 +6,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import AppHeader from "@/components/AppHeader";
 import BottomMenu from "@/components/BottomMenu";
 import Toast from "@/components/Toast";
+import { useAdminMode } from "@/lib/admin";
 import {
   analyzeRocketNowOfferImageWithOcr,
   type RocketNowOcrProgress,
@@ -17,6 +18,7 @@ import {
   createRealtimeOfferId,
   deleteSharedRealtimeOffer,
   fetchSharedRealtimeOffers,
+  hideSharedRealtimeOffer,
   markRealtimeOfferPosted,
   mergeRealtimeOffers,
   upsertSharedRealtimeOffer,
@@ -74,6 +76,9 @@ type RealtimeOffer = {
   scanService?: ServiceName;
   lat?: number;
   lng?: number;
+  hidden?: boolean;
+  hiddenAt?: string;
+  hiddenReason?: string;
 };
 
 type CurrentLocation = {
@@ -104,7 +109,10 @@ function loadOffers(): RealtimeOffer[] {
   if (!raw) return [];
 
   try {
-    return JSON.parse(raw) as RealtimeOffer[];
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed)
+      ? (parsed as RealtimeOffer[]).filter((offer) => offer.hidden !== true)
+      : [];
   } catch {
     return [];
   }
@@ -112,6 +120,20 @@ function loadOffers(): RealtimeOffer[] {
 
 function saveOffers(offers: RealtimeOffer[]) {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(offers));
+}
+
+function loadAllOffers(): RealtimeOffer[] {
+  if (typeof window === "undefined") return [];
+
+  const raw = localStorage.getItem(STORAGE_KEY);
+  if (!raw) return [];
+
+  try {
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? (parsed as RealtimeOffer[]) : [];
+  } catch {
+    return [];
+  }
 }
 
 function readOfferIdFromUrl() {
@@ -305,6 +327,7 @@ const ROCKETNOW_SCAN_CONFIG = {
 export default function RealtimeBoard() {
   const scanFileInputRef = useRef<HTMLInputElement | null>(null);
   const scanFileServiceRef = useRef<ServiceName>("ロケナウ");
+  const isAdmin = useAdminMode();
   const [offers, setOffers] = useState<RealtimeOffer[]>([]);
   const [area, setArea] = useState("");
   const [service, setService] = useState<ServiceName>("Uber");
@@ -441,6 +464,7 @@ export default function RealtimeBoard() {
 
   const filteredOffers = useMemo(() => {
     return offers.filter((offer) => {
+      if (offer.hidden === true) return false;
       const normalized = normalizeService(offer.service);
       const knownService = services.includes(normalized as ServiceName);
       const inTime = isWithinHours(offer.createdAt, selectedHours);
@@ -682,6 +706,41 @@ export default function RealtimeBoard() {
     showMessage("削除しました");
   };
 
+  const handleHideOffer = (id: string) => {
+    const hiddenAt = new Date().toISOString();
+    const localOffers = loadAllOffers();
+    const hasLocalOffer = localOffers.some((offer) => offer.id === id);
+    const nextLocal = hasLocalOffer
+      ? localOffers.map((offer) =>
+          offer.id === id
+            ? { ...offer, hidden: true, hiddenAt, hiddenReason: "admin-hide" }
+            : offer
+        )
+      : [
+          ...localOffers,
+          {
+            id,
+            createdAt: hiddenAt,
+            area: "",
+            service: "Uber",
+            amount: 1,
+            distanceKm: 0.1,
+            unitPrice: 0,
+            rank: "C" as OfferRank,
+            comment: "",
+            hidden: true,
+            hiddenAt,
+            hiddenReason: "admin-hide",
+          },
+        ];
+    saveOffers(nextLocal);
+    const next = offers.filter((offer) => offer.id !== id);
+    setOffers(next);
+    setSelectedOfferId((current) => (current === id ? next[0]?.id ?? null : current));
+    void hideSharedRealtimeOffer(id);
+    showMessage("非表示にしました");
+  };
+
   return (
     <main className="relative mx-auto h-[100dvh] w-full max-w-[430px] overflow-hidden bg-gray-50">
       <AppHeader
@@ -857,7 +916,13 @@ export default function RealtimeBoard() {
           ) : (
             <div className="space-y-3">
               {filteredOffers.map((offer) => (
-                <OfferCard key={offer.id} offer={offer} onDelete={handleDeleteOffer} />
+                <OfferCard
+                  key={offer.id}
+                  offer={offer}
+                  isAdmin={isAdmin}
+                  onDelete={handleDeleteOffer}
+                  onHide={handleHideOffer}
+                />
               ))}
             </div>
           )}
@@ -1266,12 +1331,17 @@ function BottomSheet({
 
 function OfferCard({
   offer,
+  isAdmin,
   onDelete,
+  onHide,
 }: {
   offer: RealtimeOffer;
+  isAdmin: boolean;
   onDelete: (id: string) => void;
+  onHide: (id: string) => void;
 }) {
   const [confirmingDelete, setConfirmingDelete] = useState(false);
+  const [confirmingHide, setConfirmingHide] = useState(false);
   const trimmedArea = offer.area.trim();
   const trimmedShopName = offer.shopName?.trim();
   const trimmedDropoffArea = offer.dropoffArea?.trim();
@@ -1356,8 +1426,37 @@ function OfferCard({
             </button>
           </div>
         </div>
+      ) : confirmingHide ? (
+        <div className="mt-3 rounded-xl border border-red-100 bg-red-50 px-3 py-3">
+          <div className="text-sm font-bold text-red-700">この共有を非表示にしますか？</div>
+          <div className="mt-3 flex gap-2">
+            <button
+              type="button"
+              onClick={() => setConfirmingHide(false)}
+              className="h-9 flex-1 rounded-xl bg-white text-sm font-bold text-gray-600 ring-1 ring-gray-200 active:bg-gray-50"
+            >
+              キャンセル
+            </button>
+            <button
+              type="button"
+              onClick={() => onHide(offer.id)}
+              className="h-9 flex-1 rounded-xl bg-red-600 text-sm font-bold text-white active:bg-red-700"
+            >
+              非表示
+            </button>
+          </div>
+        </div>
       ) : (
-        <div className="mt-3 flex justify-end">
+        <div className="mt-3 flex justify-end gap-2">
+          {isAdmin && (
+            <button
+              type="button"
+              onClick={() => setConfirmingHide(true)}
+              className="rounded-full bg-red-50 px-3 py-1.5 text-xs font-bold text-red-600 ring-1 ring-red-100 active:bg-red-100"
+            >
+              非表示
+            </button>
+          )}
           <button
             type="button"
             onClick={() => setConfirmingDelete(true)}

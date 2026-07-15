@@ -6,13 +6,19 @@ import AffiliateMiniAd from "@/components/AffiliateMiniAd";
 import AppHeader from "@/components/AppHeader";
 import BottomMenu from "@/components/BottomMenu";
 import RankingUserDetailSheet from "@/components/RankingUserDetailSheet";
+import { useAdminMode } from "@/lib/admin";
 import { PREFECTURES } from "@/lib/areas";
 import {
   ensureActiveUserFromProfile,
   getActiveUser,
   type UbalogUser,
 } from "@/lib/users";
-import { fetchSharedRecords, mergeRecords } from "@/lib/sharedRecords";
+import {
+  fetchSharedRecords,
+  hideSharedRecord,
+  mergeRecords,
+  type SharedRecord,
+} from "@/lib/sharedRecords";
 
 const RECORDS_STORAGE_KEY = "ubalog-records";
 const PROFILE_STORAGE_KEY = "ubalog-profile";
@@ -48,6 +54,11 @@ type StoredRecord = {
   hourly?: number;
   workMinutes?: number;
   services: Record<ServiceKey, { amount: number; deliveries: number }>;
+  deviceId?: string;
+  firestoreId?: string;
+  hidden?: boolean;
+  hiddenAt?: string;
+  hiddenReason?: string;
 };
 
 type RankingEntry = {
@@ -175,10 +186,29 @@ function loadRecords(): StoredRecord[] {
   const raw = localStorage.getItem(RECORDS_STORAGE_KEY);
   if (!raw) return [];
   try {
-    return JSON.parse(raw) as StoredRecord[];
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed)
+      ? (parsed as StoredRecord[]).filter((record) => record.hidden !== true)
+      : [];
   } catch {
     return [];
   }
+}
+
+function loadAllRecords(): StoredRecord[] {
+  const raw = localStorage.getItem(RECORDS_STORAGE_KEY);
+  if (!raw) return [];
+  try {
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? (parsed as StoredRecord[]) : [];
+  } catch {
+    return [];
+  }
+}
+
+function saveAllRecords(records: StoredRecord[]) {
+  localStorage.setItem(RECORDS_STORAGE_KEY, JSON.stringify(records));
+  window.dispatchEvent(new Event("ubalog-records-updated"));
 }
 
 function displayNameFromProfile(profile: Profile | null) {
@@ -208,6 +238,20 @@ function recordUserKey(record: StoredRecord, profile: Profile | null) {
     record.name?.trim() ||
     displayNameFromProfile(profile)
   );
+}
+
+function recordHideKey(record: StoredRecord) {
+  return [
+    record.firestoreId,
+    record.deviceId,
+    record.userId,
+    record.date,
+    record.displayName,
+    record.name,
+    record.rankingName,
+  ]
+    .filter(Boolean)
+    .join("_");
 }
 
 function recordBelongsToUser(
@@ -427,6 +471,7 @@ function dateFromQuery(value: string | null) {
 export default function RankingBoard() {
   const searchParams = useSearchParams();
   const focusedEntryRef = useRef<HTMLDivElement | null>(null);
+  const isAdmin = useAdminMode();
   const [records, setRecords] = useState<StoredRecord[]>([]);
   const [profile, setProfile] = useState<Profile | null>(null);
   const [activeUser, setActiveUser] = useState<UbalogUser | null>(null);
@@ -499,6 +544,35 @@ export default function RankingBoard() {
   const showRankingAd = rankingEntries.length >= 2;
   const shouldFocusMe = focusMode === "me";
   const focusedEntry = shouldFocusMe && myRankIndex >= 0 ? rankingEntries[myRankIndex] : null;
+
+  const handleHideEntry = (entry: RankingEntry) => {
+    const hiddenAt = new Date().toISOString();
+    const targetKeys = new Set(entry.records.map(recordHideKey));
+    const hiddenRecords = entry.records.map((record) => ({
+      ...record,
+      hidden: true,
+      hiddenAt,
+      hiddenReason: "admin-hide",
+    }));
+    const localRecords = loadAllRecords();
+    const nextLocal = localRecords.map((record) =>
+      targetKeys.has(recordHideKey(record))
+        ? {
+            ...record,
+            hidden: true,
+            hiddenAt,
+            hiddenReason: "admin-hide",
+          }
+        : record
+    );
+    saveAllRecords(nextLocal);
+    setRecords((current) =>
+      current.filter((record) => !targetKeys.has(recordHideKey(record)))
+    );
+    for (const record of hiddenRecords) {
+      void hideSharedRecord(record as SharedRecord);
+    }
+  };
 
   useEffect(() => {
     if (!shouldFocusMe || myRankIndex < 0) return;
@@ -630,6 +704,9 @@ export default function RankingBoard() {
                     metric={rankingMetric}
                     onSelect={() => setSelectedEntry({ entry, rank: index + 1 })}
                   />
+                  {isAdmin && (
+                    <AdminHideRecordButton onHide={() => handleHideEntry(entry)} />
+                  )}
                   {index === 0 && showRankingAd && (
                     <AffiliateMiniAd
                       placement={`ranking-${period}-${regionFilter}-${rankingMetric}`}
@@ -650,6 +727,9 @@ export default function RankingBoard() {
                     metric={rankingMetric}
                     onSelect={() => setSelectedEntry({ entry, rank: index + 4 })}
                   />
+                  {isAdmin && (
+                    <AdminHideRecordButton onHide={() => handleHideEntry(entry)} />
+                  )}
                 </div>
               ))}
             </div>
@@ -669,6 +749,46 @@ export default function RankingBoard() {
         />
       )}
     </main>
+  );
+}
+
+function AdminHideRecordButton({ onHide }: { onHide: () => void }) {
+  const [confirming, setConfirming] = useState(false);
+
+  if (confirming) {
+    return (
+      <div className="rounded-xl border border-red-100 bg-red-50 px-3 py-2">
+        <div className="text-xs font-bold text-red-700">この記録を非表示にしますか？</div>
+        <div className="mt-2 flex gap-2">
+          <button
+            type="button"
+            onClick={() => setConfirming(false)}
+            className="h-8 flex-1 rounded-lg bg-white text-xs font-bold text-gray-600 ring-1 ring-gray-200"
+          >
+            キャンセル
+          </button>
+          <button
+            type="button"
+            onClick={onHide}
+            className="h-8 flex-1 rounded-lg bg-red-600 text-xs font-bold text-white"
+          >
+            非表示
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex justify-end">
+      <button
+        type="button"
+        onClick={() => setConfirming(true)}
+        className="rounded-full bg-red-50 px-3 py-1.5 text-xs font-bold text-red-600 ring-1 ring-red-100"
+      >
+        非表示
+      </button>
+    </div>
   );
 }
 
