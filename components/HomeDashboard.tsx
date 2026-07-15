@@ -24,6 +24,7 @@ import {
   getActiveUser,
   getDisplayNameFromProfileOrUser,
 } from "@/lib/users";
+import { buildUbalogShareText, openXShare } from "@/lib/share";
 
 type Profile = {
   displayName?: string;
@@ -434,6 +435,24 @@ export default function HomeDashboard() {
             </div>
           </Link>
         )}
+
+        <section className="mt-4 rounded-2xl bg-white p-4 shadow-sm">
+          <div className="flex min-w-0 items-center justify-between gap-3">
+            <div className="min-w-0">
+              <div className="text-sm font-black text-gray-900">ウバログを紹介</div>
+              <div className="mt-1 truncate text-xs font-bold text-gray-500">
+                配達員向けの記録アプリをシェアできます
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={() => openXShare(buildUbalogShareText())}
+              className="shrink-0 rounded-full border border-green-200 bg-green-50 px-3 py-2 text-xs font-black text-green-700 active:bg-green-100"
+            >
+              シェア
+            </button>
+          </div>
+        </section>
       </div>
 
       <BottomMenu />

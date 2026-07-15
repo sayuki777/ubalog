@@ -7,6 +7,7 @@ import {
   getRocketNowStats,
   type RocketNowStats,
 } from "@/lib/rocketNowStats";
+import { buildRocketNowShareText, openXShare } from "@/lib/share";
 
 function yen(value: number) {
   return `￥${value.toLocaleString()}`;
@@ -62,6 +63,8 @@ export default function RocketNowStatsCard() {
 
   if (!stats?.hasRocketRecords) return null;
 
+  const canShareRocketNow = stats.monthAmount > 0 || stats.monthDeliveries > 0;
+
   return (
     <section className="mt-4 overflow-hidden rounded-2xl border border-green-100 bg-green-50 p-3 shadow-sm">
       <div className="flex min-w-0 items-start justify-between gap-3">
@@ -71,12 +74,23 @@ export default function RocketNowStatsCard() {
             {stats.comment}
           </div>
         </div>
-        <Link
-          href="/record"
-          className="shrink-0 rounded-full bg-green-600 px-3 py-1.5 text-[11px] font-black text-white shadow-sm active:bg-green-700"
-        >
-          ロケナウを記録する
-        </Link>
+        <div className="flex shrink-0 items-center gap-1.5">
+          {canShareRocketNow && (
+            <button
+              type="button"
+              onClick={() => openXShare(buildRocketNowShareText(stats))}
+              className="rounded-full border border-green-200 bg-white px-3 py-1.5 text-[11px] font-black text-green-700 shadow-sm active:bg-green-50"
+            >
+              シェア
+            </button>
+          )}
+          <Link
+            href="/record"
+            className="rounded-full bg-green-600 px-3 py-1.5 text-[11px] font-black text-white shadow-sm active:bg-green-700"
+          >
+            記録する
+          </Link>
+        </div>
       </div>
 
       <div className="mt-3 grid grid-cols-2 gap-2">

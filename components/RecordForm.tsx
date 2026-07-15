@@ -38,6 +38,7 @@ import {
 } from "@/lib/rocketNowDailyOcr";
 import { saveSingleScanFeedback } from "@/lib/rocketNowOcrFeedback";
 import { saveRecordWithSync } from "@/lib/sharedRecords";
+import { buildRecordShareText, openXShare } from "@/lib/share";
 
 const STORAGE_KEY = "ubalog-records";
 const PROFILE_STORAGE_KEY = "ubalog-profile";
@@ -305,6 +306,7 @@ export default function RecordForm() {
   const [recordGuideDismissed, setRecordGuideDismissed] = useState(false);
   const [showAfterSaveActions, setShowAfterSaveActions] = useState(false);
   const [afterSaveMessage, setAfterSaveMessage] = useState("");
+  const [lastSavedRecord, setLastSavedRecord] = useState<StoredRecord | null>(null);
   const [rocketDailyScanLoading, setRocketDailyScanLoading] = useState(false);
   const [rocketDailyScanMessage, setRocketDailyScanMessage] = useState("");
   const [rocketDailyScanResult, setRocketDailyScanResult] =
@@ -691,6 +693,7 @@ export default function RecordForm() {
         ? "記録しました！マイページで確認できます"
         : "記録しました。マイページで確認できます"
     );
+    setLastSavedRecord(newRecord);
     setShowAfterSaveActions(true);
     setSaving(true);
     setShowToast(true);
@@ -698,7 +701,7 @@ export default function RecordForm() {
     setTimeout(() => {
       router.push("/");
       router.refresh();
-    }, nextCongrats ? 2600 : isFirstRecordSave ? 3200 : 1800);
+    }, nextCongrats ? 5200 : isFirstRecordSave ? 6200 : 5200);
   };
 
   if (!loaded) return null;
@@ -939,7 +942,16 @@ export default function RecordForm() {
         {showAfterSaveActions && (
           <section className="mt-4 rounded-2xl border border-green-100 bg-white p-4 shadow-sm">
             <div className="text-sm font-black text-gray-900">{afterSaveMessage}</div>
-            <div className="mt-3 grid grid-cols-2 gap-2">
+            <div className="mt-3 grid grid-cols-3 gap-2">
+              <button
+                type="button"
+                onClick={() => {
+                  if (lastSavedRecord) openXShare(buildRecordShareText(lastSavedRecord));
+                }}
+                className="rounded-xl border border-green-200 bg-green-50 px-2 py-2 text-center text-xs font-black text-green-700 active:bg-green-100"
+              >
+                Xでシェア
+              </button>
               <Link
                 href="/ranking"
                 className="rounded-xl bg-green-600 px-3 py-2 text-center text-xs font-black text-white"
@@ -948,7 +960,7 @@ export default function RecordForm() {
               </Link>
               <Link
                 href="/"
-                className="rounded-xl border border-green-200 px-3 py-2 text-center text-xs font-black text-green-700"
+                className="rounded-xl border border-green-200 px-2 py-2 text-center text-xs font-black text-green-700"
               >
                 目標を作る
               </Link>

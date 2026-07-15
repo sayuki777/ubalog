@@ -174,8 +174,10 @@ export function getRocketNowLatestBulkImportedCount() {
   );
 }
 
-function getComment(stats: Pick<RocketNowStats, "latestBulkImportedCount" | "monthBestDay" | "monthDeliveries">) {
-  if (stats.latestBulkImportedCount) return "一気読み、いい感じです ✨";
+function getComment(
+  stats: Pick<RocketNowStats, "latestBulkImportedCount" | "monthBestDay" | "monthDeliveries">
+) {
+  if (stats.latestBulkImportedCount) return "一気読み、いい感じです";
   if (stats.monthDeliveries >= 20) return "ロケナウ伸びてます 🚀";
   if (stats.monthBestDay) return "今月のロケナウ記録、ナイスです";
   return "Rocket欄が育ってきました";
