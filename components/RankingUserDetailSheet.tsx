@@ -44,14 +44,14 @@ function formatUnitPrice(amount: number) {
 function mainMetricValue(entry: RankingDetailEntry, metric: RankingMetricKey) {
   if (metric === "hourly") return formatHourly(entry.hourly);
   if (metric === "deliveries") return `${entry.deliveries.toLocaleString()}件`;
-  if (metric === "unitPrice") return `${formatCurrency(entry.unitPrice)}/km`;
+  if (metric === "unitPrice") return formatCurrency(entry.total);
   return formatCurrency(entry.total);
 }
 
 function metricCaption(metric: RankingMetricKey) {
   if (metric === "hourly") return "時給順";
   if (metric === "deliveries") return "件数順";
-  if (metric === "unitPrice") return "単価順";
+  if (metric === "unitPrice") return "報酬順";
   return "売上順";
 }
 

@@ -92,9 +92,9 @@ const PARTICIPATE_UNIT_PRICE_LINK = (
     href="/realtime"
     className="block rounded-2xl border border-green-100 bg-green-50 px-3 py-3 text-sm font-bold text-green-800 active:bg-green-100"
   >
-    <div>高単価案件を見つけたら共有しよう</div>
+    <div>高報酬案件を見つけたら共有しよう</div>
     <div className="mt-1 text-xs text-green-700">
-      リアルタイム共有で単価ランキングに参加できます
+      リアルタイム共有で報酬単価ランキングに参加できます
     </div>
     <div className="mt-2 inline-flex rounded-full bg-green-600 px-3 py-1.5 text-xs text-white">
       案件を共有する
@@ -423,7 +423,7 @@ function periodOffers(offers: SharedRealtimeOffer[], period: PeriodKey, calendar
   const week = currentWeekRange();
 
   return offers.filter((offer) => {
-    if (offer.hidden === true || offer.unitPrice <= 0) return false;
+    if (offer.hidden === true || offer.amount <= 0) return false;
     const date = offerDate(offer);
     if (!date) return false;
     if (period === "today") return date === today;
@@ -465,7 +465,7 @@ function compareRankingEntries(
     return b.deliveries - a.deliveries || b.total - a.total || b.hourly - a.hourly;
   }
   if (metric === "unitPrice") {
-    return b.unitPrice - a.unitPrice || b.total - a.total || b.deliveries - a.deliveries;
+    return b.total - a.total || b.unitPrice - a.unitPrice || b.deliveries - a.deliveries;
   }
   return b.total - a.total || b.hourly - a.hourly || b.deliveries - a.deliveries;
 }
@@ -541,12 +541,15 @@ function buildRankingEntries(
 function buildRealtimeUnitPriceEntries(offers: SharedRealtimeOffer[]) {
   return offers
     .map<RankingEntry | null>((offer) => {
-      if (offer.hidden === true || offer.amount <= 0 || offer.distanceKm <= 0) {
+      if (offer.hidden === true || offer.amount <= 0) {
         return null;
       }
       const unitPrice =
-        offer.unitPrice > 0 ? offer.unitPrice : Math.floor(offer.amount / offer.distanceKm);
-      if (unitPrice <= 0) return null;
+        offer.unitPrice > 0
+          ? offer.unitPrice
+          : offer.distanceKm > 0
+          ? Math.floor(offer.amount / offer.distanceKm)
+          : 0;
 
       return {
         key: offer.id,
@@ -571,14 +574,14 @@ function buildRealtimeUnitPriceEntries(offers: SharedRealtimeOffer[]) {
 function mainMetricValue(entry: RankingEntry, metric: RankingMetricKey) {
   if (metric === "hourly") return formatHourly(entry.hourly);
   if (metric === "deliveries") return `${entry.deliveries.toLocaleString()}件`;
-  if (metric === "unitPrice") return `${formatCurrency(entry.unitPrice)}/km`;
+  if (metric === "unitPrice") return formatCurrency(entry.total);
   return formatCurrency(entry.total);
 }
 
 function metricCaption(metric: RankingMetricKey) {
   if (metric === "hourly") return "時給順";
   if (metric === "deliveries") return "件数順";
-  if (metric === "unitPrice") return "単価順";
+  if (metric === "unitPrice") return "報酬順";
   return "売上順";
 }
 
@@ -587,7 +590,7 @@ function subMetrics(entry: RankingEntry, metric: RankingMetricKey) {
     return [
       `報酬 ${formatCurrency(entry.total)}`,
       entry.offer ? `距離 ${entry.offer.distanceKm.toLocaleString()}km` : "",
-      entry.offer ? `サービス ${entry.offer.service}` : "",
+      entry.unitPrice > 0 ? `参考 ${formatCurrency(entry.unitPrice)}/km` : "",
     ].filter(Boolean);
   }
   if (metric === "hourly") {
@@ -850,7 +853,7 @@ export default function RankingBoard() {
               <div className="rounded-xl bg-gray-50 px-4 py-8 text-center text-sm font-bold text-gray-500">
                 <div>
                   {rankingMetric === "unitPrice"
-                    ? "まだ単価ランキングはありません"
+                    ? "まだ報酬単価ランキングはありません"
                     : "まだランキング記録はありません"}
                 </div>
                 <div className="mt-1 text-xs">
@@ -1269,7 +1272,7 @@ function UnitPriceRankingCard({
             {mainMetricValue(entry, "unitPrice")}
           </div>
           <div className="mt-1 text-sm font-bold text-green-700">
-            {offer?.service ?? "サービス -"}
+            {offer?.service ?? "サービス -"} / 報酬単価ランキング
           </div>
         </div>
         <div className="shrink-0 text-right text-xs font-bold text-gray-500">
@@ -1278,7 +1281,12 @@ function UnitPriceRankingCard({
       </div>
 
       <div className="mt-3 rounded-xl bg-white/80 px-3 py-2 text-sm font-bold text-gray-700">
-        報酬 {formatCurrency(entry.total)} / {offer ? `${offer.distanceKm.toLocaleString()}km` : "-"}
+        距離 {offer ? `${offer.distanceKm.toLocaleString()}km` : "-"}
+        {entry.unitPrice > 0 && (
+          <span className="ml-2 text-xs text-gray-500">
+            / 参考 {formatCurrency(entry.unitPrice)}/km
+          </span>
+        )}
       </div>
 
       <div className="mt-2 flex min-w-0 items-center justify-between gap-2 text-xs font-bold text-gray-500">
