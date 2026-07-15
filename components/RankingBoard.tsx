@@ -11,6 +11,7 @@ import { useAdminMode } from "@/lib/admin";
 import { PREFECTURES } from "@/lib/areas";
 import {
   ensureActiveUserFromProfile,
+  getAnonymousDisplayName,
   getActiveUser,
   type UbalogUser,
 } from "@/lib/users";
@@ -40,6 +41,7 @@ type Profile = {
   name?: string;
   nickname?: string;
   rankingName?: string;
+  anonymousNumber?: string;
   prefecture?: string;
   region?: string;
   area?: string;
@@ -52,6 +54,7 @@ type StoredRecord = {
   name?: string;
   rankingName?: string;
   nickname?: string;
+  anonymousNumber?: string;
   prefecture?: string;
   region?: string;
   area?: string;
@@ -152,7 +155,7 @@ function currentWeekRange() {
 }
 
 function formatCurrency(amount: number) {
-  return `・･${amount.toLocaleString()}`;
+  return `¥${Math.max(0, Math.floor(amount)).toLocaleString()}`;
 }
 
 function formatMinutes(minutes: number) {
@@ -221,23 +224,41 @@ function saveAllRecords(records: StoredRecord[]) {
 }
 
 function displayNameFromProfile(profile: Profile | null) {
-  return (
+  return sanitizeDisplayName(
     profile?.displayName?.trim() ||
     profile?.name?.trim() ||
     profile?.rankingName?.trim() ||
     profile?.nickname?.trim() ||
-    "蛹ｿ蜷埼・驕泌藤"
+    (profile?.anonymousNumber ? `匿名${profile.anonymousNumber}` : "") ||
+    ""
   );
 }
 
 function displayNameFromRecord(record: StoredRecord, profile: Profile | null) {
-  return (
+  return sanitizeDisplayName(
     record.displayName?.trim() ||
     record.name?.trim() ||
     record.rankingName?.trim() ||
     record.nickname?.trim() ||
+    (record.anonymousNumber ? `匿名${record.anonymousNumber}` : "") ||
     displayNameFromProfile(profile)
   );
+}
+
+function looksBrokenText(value: string) {
+  return /[縺繧譁譛蜿荳鬆莉蛯蟆邨髢驕螢謨譌逕鬟髱]/.test(value);
+}
+
+function sanitizeDisplayName(value?: string) {
+  const trimmed = (value ?? "").replace(/[\r\n\t]+/g, " ").trim();
+  if (!trimmed || looksBrokenText(trimmed)) return getAnonymousDisplayName();
+  return trimmed.length > 12 ? `${trimmed.slice(0, 12)}…` : trimmed;
+}
+
+function safeText(value?: string, maxLength = 24) {
+  const trimmed = (value ?? "").replace(/[\r\n\t]+/g, " ").trim();
+  if (!trimmed || looksBrokenText(trimmed)) return "";
+  return trimmed.length > maxLength ? `${trimmed.slice(0, maxLength)}…` : trimmed;
 }
 
 function recordUserKey(record: StoredRecord, profile: Profile | null) {
@@ -392,14 +413,14 @@ function buildRankingEntries(
         return {
           key: `${record.date}-${recordUserKey(record, profile)}`,
           name,
-          prefecture: record.prefecture ?? profile?.prefecture ?? "",
-          area: record.area ?? profile?.area ?? "",
+          prefecture: safeText(record.prefecture ?? profile?.prefecture ?? "", 12),
+          area: safeText(record.area ?? profile?.area ?? "", 16),
           total: record.total,
           workMinutes,
           deliveries,
           hourly,
           unitPrice: deliveries > 0 ? Math.floor(record.total / deliveries) : 0,
-          comment: record.comment ?? "",
+          comment: safeText(record.comment ?? "", 28),
           isCurrentUser: recordBelongsToUser(record, profile, activeUser),
           records: [record],
         };
@@ -422,14 +443,14 @@ function buildRankingEntries(
     map.set(key, {
       key,
       name,
-      prefecture: record.prefecture ?? profile?.prefecture ?? "",
-      area: record.area ?? profile?.area ?? "",
+      prefecture: safeText(record.prefecture ?? profile?.prefecture ?? "", 12),
+      area: safeText(record.area ?? profile?.area ?? "", 16),
       total,
       workMinutes,
       deliveries,
       hourly: calculateHourly(total, workMinutes),
       unitPrice: deliveries > 0 ? Math.floor(total / deliveries) : 0,
-      comment,
+      comment: safeText(comment, 28),
       isCurrentUser:
         current?.isCurrentUser || recordBelongsToUser(record, profile, activeUser),
       records: entryRecords,
@@ -444,15 +465,18 @@ function buildRealtimeUnitPriceEntries(offers: SharedRealtimeOffer[]) {
     .filter((offer) => offer.hidden !== true && offer.unitPrice > 0)
     .map<RankingEntry>((offer) => ({
       key: offer.id,
-      name: offer.name?.trim() || "匿名共有",
+      name: sanitizeDisplayName(offer.name),
       prefecture: "",
-      area: [offer.area, offer.shopName, offer.dropoffArea].filter(Boolean).join(" / "),
+      area: [offer.area, offer.shopName, offer.dropoffArea]
+        .map((value) => safeText(String(value ?? ""), 12))
+        .filter(Boolean)
+        .join(" / "),
       total: offer.amount,
       workMinutes: 0,
       deliveries: 0,
       hourly: 0,
       unitPrice: offer.unitPrice,
-      comment: offer.comment || `${offer.service} ${offer.distanceKm.toLocaleString()}km`,
+      comment: safeText(offer.comment, 24) || `${offer.service} ${offer.distanceKm.toLocaleString()}km`,
       isCurrentUser: false,
       records: [],
       offer,
@@ -484,31 +508,31 @@ function subMetrics(entry: RankingEntry, metric: RankingMetricKey) {
   }
   if (metric === "hourly") {
     return [
-      `螢ｲ荳・${formatCurrency(entry.total)}`,
-      `${entry.deliveries.toLocaleString()}莉ｶ`,
-      `遞ｼ蜒・${formatMinutes(entry.workMinutes)}`,
+      `売上 ${formatCurrency(entry.total)}`,
+      `${entry.deliveries.toLocaleString()}件`,
+      `稼働 ${formatMinutes(entry.workMinutes)}`,
     ];
   }
   if (metric === "deliveries") {
     return [
-      `螢ｲ荳・${formatCurrency(entry.total)}`,
-      `譎らｵｦ ${formatHourly(entry.hourly)}`,
-      `1莉ｶ ${formatUnitPrice(entry.unitPrice)}`,
+      `売上 ${formatCurrency(entry.total)}`,
+      `時給 ${formatHourly(entry.hourly)}`,
+      `1件 ${formatUnitPrice(entry.unitPrice)}`,
     ];
   }
   return [
-    `譎らｵｦ ${formatHourly(entry.hourly)}`,
-    `${entry.deliveries.toLocaleString()}莉ｶ`,
-    `1莉ｶ ${formatUnitPrice(entry.unitPrice)}`,
+    `時給 ${formatHourly(entry.hourly)}`,
+    `${entry.deliveries.toLocaleString()}件`,
+    `1件 ${formatUnitPrice(entry.unitPrice)}`,
   ];
 }
 
 function periodLabel(period: PeriodKey, calendarDate: string) {
-  if (period === "today") return "莉頑律";
-  if (period === "yesterday") return "譏ｨ譌･";
-  if (period === "week") return "莉企ｱ";
-  if (period === "month") return "莉頑怦";
-  if (period === "previousMonth") return "蜑肴怦";
+  if (period === "today") return "今日";
+  if (period === "yesterday") return "昨日";
+  if (period === "week") return "今週";
+  if (period === "month") return "今月";
+  if (period === "previousMonth") return "前月";
   return calendarDate.replaceAll("-", "/");
 }
 
@@ -680,7 +704,7 @@ export default function RankingBoard() {
 
   return (
     <main className="mx-auto min-h-screen w-full max-w-[430px] bg-gray-50 pb-24">
-      <AppHeader title="繝ｩ繝ｳ繧ｭ繝ｳ繧ｰ" />
+      <AppHeader title="ランキング" />
 
       <div className="px-4 pt-2">
         <section className="rounded-2xl bg-white px-3 py-3 shadow-sm">
@@ -770,12 +794,13 @@ export default function RankingBoard() {
             <div className="space-y-3">
               {shouldFocusMe && focusedEntry && (
                 <div className="rounded-2xl bg-green-50 px-3 py-3 text-sm font-bold text-green-800">
-                  縺ゅ↑縺溘・鬆・ｽ・ {myRankIndex + 1}菴・/ {rankingEntries.length}莠ｺ荳ｭ
+                  あなたの順位 {myRankIndex + 1}位 / {rankingEntries.length}人中
                 </div>
               )}
               {shouldFocusMe && !focusedEntry && (
                 <div className="rounded-2xl bg-amber-50 px-3 py-3 text-sm font-bold text-amber-800">
-                  莉雁屓縺ｮ險倬鹸縺ｯ繝ｩ繝ｳ繧ｭ繝ｳ繧ｰ蟇ｾ雎｡螟悶〒縺吶ゅΛ繝ｳ繧ｭ繝ｳ繧ｰ縺ｫ蜿ょ刈縺吶ｋ縺ｨ縺薙％縺ｫ陦ｨ遉ｺ縺輔ｌ縺ｾ縺吶・                </div>
+                  今回の記録はランキング対象外です。ランキングに参加するとここに表示されます。
+                </div>
               )}
               <div className="rounded-2xl bg-green-50 px-3 py-3 text-sm font-bold text-green-800">
                 {myRankIndex >= 0
@@ -937,10 +962,12 @@ function PodiumCard({
                   : "text-sm font-black text-gray-900"
               }
             >
-              {rank}菴・            </span>
+              {rank}位
+            </span>
             {entry.isCurrentUser && (
               <span className="rounded-full bg-green-600 px-2 py-0.5 text-[10px] font-bold text-white">
-                縺ゅ↑縺・              </span>
+                あなた
+              </span>
             )}
           </div>
           <div

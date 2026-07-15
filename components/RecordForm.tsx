@@ -837,9 +837,9 @@ export default function RecordForm() {
                   title="ロケナウ一気読み"
                   aria-label="ロケナウ一気読み"
                   onClick={openRocketBulkImport}
-                  className="h-10 shrink-0 rounded-xl border border-green-200 bg-green-50 px-2 text-[11px] font-black text-green-700 active:bg-green-100"
+                  className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-green-200 bg-green-50 text-lg font-black text-green-700 active:bg-green-100"
                 >
-                  一気読み
+                  📷
                 </button>
               }
             />
