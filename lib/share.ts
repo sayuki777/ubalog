@@ -62,7 +62,7 @@ export function buildUbalogShareText() {
     "④ 目標応援ギャル「ユリア」搭載検討中)",
     "",
     "ホーム画面にショートカット作って、",
-    "高単価エリアに行こうぜ〜！！",
+    "高報酬エリアに行こうぜ〜！！",
     "",
     "#ウバログ #フードデリバリー",
     "https://ubalog.vercel.app",
@@ -90,9 +90,9 @@ export function buildRocketNowShareText(stats: RocketNowShareLike) {
 
 export function buildRealtimeOfferShareText(offer: RealtimeOfferShareLike) {
   return [
-    `${offer.service || "フーデリ"}案件を共有しました！`,
+    `${offer.service || "フーデリ"}の高報酬案件を共有しました！`,
     `報酬 ${yen(offer.amount)} / ${offer.distanceKm.toLocaleString()}km`,
-    `単価 ${yen(offer.unitPrice)}/km`,
+    `参考 ${yen(offer.unitPrice)}/km`,
     "",
     "ウバログでリアルタイム共有中",
     "#ウバログ #フードデリバリー",

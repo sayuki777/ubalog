@@ -827,6 +827,9 @@ export default function RealtimeBoard() {
             <div className="mt-1 truncate text-xs font-bold text-green-700">
               {lastSharedOffer.service} ￥{lastSharedOffer.amount.toLocaleString()} / {lastSharedOffer.distanceKm.toLocaleString()}km
             </div>
+            <div className="mt-1 text-[11px] font-bold leading-4 text-gray-500">
+              1件あたり報酬が高い案件ランキングに反映されます
+            </div>
             <div className="mt-2 grid grid-cols-2 gap-2">
               <button
                 type="button"
@@ -1127,7 +1130,7 @@ export default function RealtimeBoard() {
                   </div>
 
                   <div className="rounded-2xl border border-gray-200 bg-white p-3">
-                    <div className="text-sm font-bold text-gray-700">距離単価</div>
+                    <div className="text-sm font-bold text-gray-700">参考</div>
                     <div className="mt-2 text-right text-2xl font-bold text-gray-900">
                       ￥{unitPrice.toLocaleString()}
                     </div>
@@ -1136,7 +1139,7 @@ export default function RealtimeBoard() {
                 </div>
 
                 <div className={`rounded-2xl border p-3 ${rankPanelClass(rank)}`}>
-                  <div className="text-xs font-bold opacity-80">ランク判定</div>
+                  <div className="text-xs font-bold opacity-80">距離と報酬の目安</div>
                   <div className="mt-1 text-lg font-bold">{rankLabel(rank)}</div>
                 </div>
 
@@ -1294,10 +1297,13 @@ function ShareSyncFooter({
                   {service}
                 </div>
                 <div className="text-lg font-black text-gray-900">
-                  ￥{amountNumber.toLocaleString()} / {distanceNumber.toLocaleString()}km
+                  報酬 ￥{amountNumber.toLocaleString()}
                 </div>
                 <div className="mt-0.5 text-sm font-bold text-green-700">
-                  ￥{unitPrice.toLocaleString()}/km・{rank}ランク
+                  {service} / {distanceNumber.toLocaleString()}km
+                </div>
+                <div className="mt-0.5 text-xs font-bold text-gray-500">
+                  参考 ￥{unitPrice.toLocaleString()}/km・{rank}ランク
                 </div>
               </div>
             </div>
@@ -1427,8 +1433,8 @@ function OfferCard({
             </div>
           </div>
           <div className="text-right">
-            <div className="text-xs font-bold text-green-700">距離単価</div>
-            <div className="mt-1 text-lg font-black text-green-700">
+            <div className="text-xs font-bold text-green-700">参考</div>
+            <div className="mt-1 text-sm font-black text-green-700">
               ￥{offer.unitPrice.toLocaleString()}/km
             </div>
           </div>

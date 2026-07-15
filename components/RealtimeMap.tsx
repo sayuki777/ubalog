@@ -206,8 +206,8 @@ export default function RealtimeMap({
                   <div className="text-2xl font-black text-gray-900">
                     ￥{offer.amount.toLocaleString()}
                   </div>
-                  <div className="mt-1 text-base font-black text-green-700">
-                    ￥{offer.unitPrice.toLocaleString()}/km
+                  <div className="mt-1 text-xs font-bold text-gray-500">
+                    参考 ￥{offer.unitPrice.toLocaleString()}/km
                   </div>
                 </div>
                 <div className="mt-2 flex items-center justify-between gap-2">
