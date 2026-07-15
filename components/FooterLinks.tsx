@@ -4,6 +4,7 @@ import Link from "next/link";
 
 const footerLinks = [
   { href: "/feedback", label: "不具合報告・ご要望" },
+  { href: "/recruit", label: "配達員登録リンク" },
   { href: "/test", label: "動作チェック" },
   { href: "/terms", label: "利用ルール" },
   { href: "/privacy", label: "プライバシー" },

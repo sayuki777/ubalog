@@ -451,10 +451,13 @@ export default function HomeDashboard() {
             className="mt-4 block rounded-2xl border border-green-100 bg-white p-4 shadow-sm active:bg-green-50"
           >
             <div className="text-sm font-black text-gray-900">
-              配達を始めたい人はこちら
+              これから配達を始める方へ
             </div>
-            <div className="mt-1 text-xs font-bold text-green-700">
-              配達員募集を見る
+            <div className="mt-1 text-xs font-bold leading-5 text-gray-500">
+              配達員登録リンクをまとめています。
+            </div>
+            <div className="mt-2 inline-flex rounded-full bg-green-50 px-3 py-1.5 text-xs font-black text-green-700">
+              配達を始める
             </div>
           </Link>
         )}
