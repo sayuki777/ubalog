@@ -1,5 +1,10 @@
+import { Suspense } from "react";
 import RankingBoard from "../../components/RankingBoard";
 
 export default function RankingPage() {
-  return <RankingBoard />;
+  return (
+    <Suspense fallback={null}>
+      <RankingBoard />
+    </Suspense>
+  );
 }

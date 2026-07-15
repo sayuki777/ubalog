@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import AffiliateMiniAd from "@/components/AffiliateMiniAd";
 import AppHeader from "@/components/AppHeader";
 import BottomMenu from "@/components/BottomMenu";
@@ -405,19 +406,44 @@ function regionLabel(region: RegionFilterKey, prefecture: string) {
   return region;
 }
 
+function periodFromQuery(value: string | null): PeriodKey {
+  const periodKeys: PeriodKey[] = [
+    "today",
+    "yesterday",
+    "week",
+    "month",
+    "previousMonth",
+    "calendar",
+  ];
+  return value && periodKeys.includes(value as PeriodKey)
+    ? (value as PeriodKey)
+    : "today";
+}
+
+function dateFromQuery(value: string | null) {
+  return value && /^\d{4}-\d{2}-\d{2}$/.test(value) ? value : todayIsoDate();
+}
+
 export default function RankingBoard() {
+  const searchParams = useSearchParams();
+  const focusedEntryRef = useRef<HTMLDivElement | null>(null);
   const [records, setRecords] = useState<StoredRecord[]>([]);
   const [profile, setProfile] = useState<Profile | null>(null);
   const [activeUser, setActiveUser] = useState<UbalogUser | null>(null);
-  const [period, setPeriod] = useState<PeriodKey>("today");
+  const [period, setPeriod] = useState<PeriodKey>(() =>
+    periodFromQuery(searchParams.get("period"))
+  );
   const [regionFilter, setRegionFilter] = useState<RegionFilterKey>("全国");
   const [rankingMetric, setRankingMetric] = useState<RankingMetricKey>("sales");
   const [prefectureFilter, setPrefectureFilter] = useState("");
-  const [calendarDate, setCalendarDate] = useState(todayIsoDate());
+  const [calendarDate, setCalendarDate] = useState(() =>
+    dateFromQuery(searchParams.get("date"))
+  );
   const [selectedEntry, setSelectedEntry] = useState<{
     entry: RankingEntry;
     rank: number;
   } | null>(null);
+  const focusMode = searchParams.get("focus");
 
   useEffect(() => {
     const load = () => {
@@ -471,6 +497,19 @@ export default function RankingBoard() {
   const others = rankingEntries.slice(3);
   const myRankIndex = rankingEntries.findIndex((entry) => entry.isCurrentUser);
   const showRankingAd = rankingEntries.length >= 2;
+  const shouldFocusMe = focusMode === "me";
+  const focusedEntry = shouldFocusMe && myRankIndex >= 0 ? rankingEntries[myRankIndex] : null;
+
+  useEffect(() => {
+    if (!shouldFocusMe || myRankIndex < 0) return;
+    const timer = window.setTimeout(() => {
+      focusedEntryRef.current?.scrollIntoView({
+        behavior: "smooth",
+        block: "center",
+      });
+    }, 350);
+    return () => window.clearTimeout(timer);
+  }, [myRankIndex, shouldFocusMe]);
 
   return (
     <main className="mx-auto min-h-screen w-full max-w-[430px] bg-gray-50 pb-24">
@@ -562,6 +601,16 @@ export default function RankingBoard() {
             </div>
           ) : (
             <div className="space-y-3">
+              {shouldFocusMe && focusedEntry && (
+                <div className="rounded-2xl bg-green-50 px-3 py-3 text-sm font-bold text-green-800">
+                  あなたの順位: {myRankIndex + 1}位 / {rankingEntries.length}人中
+                </div>
+              )}
+              {shouldFocusMe && !focusedEntry && (
+                <div className="rounded-2xl bg-amber-50 px-3 py-3 text-sm font-bold text-amber-800">
+                  今回の記録はランキング対象外です。ランキングに参加するとここに表示されます。
+                </div>
+              )}
               <div className="rounded-2xl bg-green-50 px-3 py-3 text-sm font-bold text-green-800">
                 {myRankIndex >= 0
                   ? `この条件でのあなたの順位: ${myRankIndex + 1}位 / ${
@@ -570,7 +619,11 @@ export default function RankingBoard() {
                   : "まだランキングに記録がありません。条件を変えると表示される場合があります"}
               </div>
               {top3.map((entry, index) => (
-                <div key={entry.key} className="space-y-3">
+                <div
+                  key={entry.key}
+                  ref={shouldFocusMe && entry.isCurrentUser ? focusedEntryRef : null}
+                  className="space-y-3"
+                >
                   <PodiumCard
                     entry={entry}
                     rank={index + 1}
@@ -587,13 +640,17 @@ export default function RankingBoard() {
                 </div>
               ))}
               {others.map((entry, index) => (
-                <RankingCard
+                <div
                   key={entry.key}
-                  entry={entry}
-                  rank={index + 4}
-                  metric={rankingMetric}
-                  onSelect={() => setSelectedEntry({ entry, rank: index + 4 })}
-                />
+                  ref={shouldFocusMe && entry.isCurrentUser ? focusedEntryRef : null}
+                >
+                  <RankingCard
+                    entry={entry}
+                    rank={index + 4}
+                    metric={rankingMetric}
+                    onSelect={() => setSelectedEntry({ entry, rank: index + 4 })}
+                  />
+                </div>
               ))}
             </div>
           )}

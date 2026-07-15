@@ -258,6 +258,22 @@ function formatBreakMinutes(minutes: number) {
   return `${h}:${String(m).padStart(2, "0")}`;
 }
 
+function rankingUrlForDate(value: string) {
+  const today = todayIsoDate();
+  const yesterday = offsetIsoDate(-1);
+  const params = new URLSearchParams({ focus: "me", date: value });
+
+  if (value === today) {
+    params.set("period", "today");
+  } else if (value === yesterday) {
+    params.set("period", "yesterday");
+  } else {
+    params.set("period", "calendar");
+  }
+
+  return `/ranking?${params.toString()}`;
+}
+
 function roundTimeToFiveMinutes(value: string) {
   const [hour, minute] = value.split(":").map(Number);
   if (Number.isNaN(hour) || Number.isNaN(minute)) return value;
@@ -699,9 +715,9 @@ export default function RecordForm() {
     setShowToast(true);
 
     setTimeout(() => {
-      router.push("/");
+      router.push(rankingUrlForDate(newRecord.date));
       router.refresh();
-    }, nextCongrats ? 5200 : isFirstRecordSave ? 6200 : 5200);
+    }, nextCongrats ? 2600 : 1000);
   };
 
   if (!loaded) return null;

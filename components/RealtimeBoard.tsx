@@ -763,7 +763,7 @@ export default function RealtimeBoard() {
         )}
 
         {positionMode === "map" && !shareOpen && (
-          <div className="absolute left-4 right-20 top-36 z-[520] rounded-2xl bg-white/95 px-4 py-3 text-sm font-bold text-gray-800 shadow-lg">
+          <div className="absolute bottom-56 left-4 right-4 z-[520] rounded-2xl bg-white/95 px-4 py-3 text-center text-sm font-bold leading-5 text-gray-800 shadow-lg">
             {pickedLocation
               ? "地図上で位置指定済み"
               : "地図をタップして共有位置を指定してください"}
@@ -1158,7 +1158,7 @@ function ShareSyncFooter({
         )}
       </div>
 
-      <div className={variant === "map" ? "mt-2 grid grid-cols-2 gap-2" : "mt-2"}>
+      <div className={variant === "map" ? "mt-2 grid grid-cols-2 gap-2" : "mt-3 flex justify-center"}>
         {variant === "map" && onEdit && (
           <button
             type="button"
@@ -1172,7 +1172,9 @@ function ShareSyncFooter({
           type="button"
           onClick={onSubmit}
           disabled={!canSubmit}
-          className="h-12 rounded-2xl bg-green-600 text-base font-bold text-white shadow-sm active:scale-[0.99] disabled:bg-gray-300"
+          className={`h-12 rounded-2xl bg-green-600 text-base font-bold text-white shadow-sm active:scale-[0.99] disabled:bg-gray-300 ${
+            variant === "sheet" ? "w-full max-w-[320px]" : ""
+          }`}
         >
           {actionLabel}
         </button>
