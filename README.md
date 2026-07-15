@@ -30,6 +30,9 @@ npm run build
 - GoogleフォームURLは `NEXT_PUBLIC_UBALOG_FEEDBACK_FORM_URL` / `NEXT_PUBLIC_UBALOG_REQUEST_FORM_URL` で差し替え可能です。
 - X投稿リンクからの報告も使えます。
 - 本格デザインは後で差し替え可能です。
+- `/test` に公開前チェックリストを掲載しています。
+- チェック状態は localStorage に保存されます。
+- 公開前に記録/ランキング/リアルタイム共有/ニュースを確認します。
 
 ## Firebase
 
