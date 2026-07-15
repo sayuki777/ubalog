@@ -7,9 +7,7 @@ import BottomMenu from "@/components/BottomMenu";
 import FirstStepGuide from "@/components/FirstStepGuide";
 import PersonalDashboard from "@/components/PersonalDashboard";
 import PersonalNewsCard from "@/components/PersonalNewsCard";
-import RealDeviceTestPanel from "@/components/RealDeviceTestPanel";
 import RocketNowStatsCard from "@/components/RocketNowStatsCard";
-import TestOperationPanel from "@/components/TestOperationPanel";
 import {
   getHighlightUpdate,
   hasHighlight,
@@ -286,6 +284,8 @@ export default function HomeDashboard() {
           </div>
         </section>
 
+        {records.length === 0 && <WelcomeGuideCard />}
+
         <FirstStepGuide
           recordsCount={records.length}
           onboardingDismissed={onboardingDismissed}
@@ -375,13 +375,35 @@ export default function HomeDashboard() {
             </div>
           </Link>
         )}
-
-        <TestOperationPanel />
-        <RealDeviceTestPanel />
       </div>
 
       <BottomMenu />
     </main>
+  );
+}
+
+function WelcomeGuideCard() {
+  return (
+    <section className="mt-4 rounded-2xl border border-green-100 bg-white p-4 shadow-sm">
+      <div className="text-base font-black text-gray-900">ウバログへようこそ</div>
+      <p className="mt-1 text-sm font-bold leading-6 text-gray-600">
+        配達の売上を記録して、ランキングやニュースで振り返れます。
+      </p>
+      <div className="mt-3 grid grid-cols-2 gap-2">
+        <Link
+          href="/record"
+          className="rounded-xl bg-green-600 px-3 py-2.5 text-center text-xs font-black text-white active:bg-green-700"
+        >
+          今日の記録をする
+        </Link>
+        <Link
+          href="/recruit"
+          className="rounded-xl border border-green-200 bg-green-50 px-3 py-2.5 text-center text-xs font-black text-green-700 active:bg-green-100"
+        >
+          配達員募集を見る
+        </Link>
+      </div>
+    </section>
   );
 }
 

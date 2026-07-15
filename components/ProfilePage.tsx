@@ -88,6 +88,8 @@ export default function ProfilePage() {
   const [loaded, setLoaded] = useState(false);
   const [showToast, setShowToast] = useState(false);
   const [recordCount, setRecordCount] = useState(0);
+  const [feedbackCopyMessage, setFeedbackCopyMessage] = useState("");
+  const [feedbackFallbackText, setFeedbackFallbackText] = useState("");
 
   useEffect(() => {
     const timer = window.setTimeout(() => {
@@ -140,6 +142,24 @@ export default function ProfilePage() {
     window.setTimeout(() => {
       setShowToast(false);
     }, 1600);
+  };
+
+  const copyFeedbackText = async () => {
+    const text = [
+      "ウバログを使ってみました。",
+      "気づいたこと：",
+      "機種：",
+      "画面：",
+    ].join("\n");
+
+    try {
+      await navigator.clipboard.writeText(text);
+      setFeedbackCopyMessage("コピーしました");
+      setFeedbackFallbackText("");
+    } catch {
+      setFeedbackCopyMessage("文章を表示しました");
+      setFeedbackFallbackText(text);
+    }
   };
 
   if (!loaded) return null;
@@ -237,15 +257,46 @@ export default function ProfilePage() {
 
         <DataBackupPanel />
 
+        <section className="mt-4 rounded-2xl bg-white p-4 shadow-sm">
+          <div className="text-sm font-black text-gray-900">
+            不具合・感想を送る
+          </div>
+          <p className="mt-1 text-xs font-bold leading-5 text-gray-500">
+            気づいたことを送るときの文章をコピーできます。
+          </p>
+          <button
+            type="button"
+            onClick={() => void copyFeedbackText()}
+            className="mt-3 h-10 w-full rounded-xl border border-green-200 bg-green-50 text-sm font-black text-green-700 active:bg-green-100"
+          >
+            コピーする
+          </button>
+          {feedbackCopyMessage && (
+            <div className="mt-2 text-xs font-bold text-green-700">
+              {feedbackCopyMessage}
+            </div>
+          )}
+          {feedbackFallbackText && (
+            <textarea
+              value={feedbackFallbackText}
+              readOnly
+              className="mt-2 max-h-32 w-full resize-none rounded-xl border border-gray-200 bg-gray-50 px-3 py-2 text-xs text-gray-700 outline-none"
+            />
+          )}
+        </section>
+
         {showRecruitLink && (
           <Link
             href="/recruit"
             className="mt-4 block rounded-2xl border border-green-100 bg-white p-4 shadow-sm active:bg-green-50"
           >
             <div className="text-sm font-black text-gray-900">
-              配達員を始めたい人はこちら
+              配達を始めたい人はこちら
             </div>
-            <div className="mt-1 text-xs font-bold text-green-700">
+            <div className="mt-1 text-xs font-bold text-gray-500">
+              Uber Eats・ロケナウ・menuなどの登録導線をまとめています。
+            </div>
+            <div className="mt-2 text-xs font-bold text-green-700">
               配達員募集を見る
             </div>
           </Link>

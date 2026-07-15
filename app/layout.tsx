@@ -3,7 +3,7 @@ import "./globals.css";
 
 export const metadata = {
   title: "ウバログ",
-  description: "配達記録と共有のためのスマホ向けアプリ",
+  description: "配達員向けの売上記録アプリ",
   applicationName: "ウバログ",
 };
 

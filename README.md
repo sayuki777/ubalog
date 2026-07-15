@@ -1,6 +1,6 @@
 # ウバログ
 
-配達記録、目標確認、ランキング、リアルタイム共有をスマホで確認するためのWebアプリです。
+配達員向けの売上記録アプリです。記録、ランキング、ニュース、リアルタイム共有をスマホ幅で確認できます。
 
 ## 開発コマンド
 
@@ -11,24 +11,36 @@ npm run lint
 npm run build
 ```
 
-## テスト公開前の確認
+## 公開メモ
 
-- 開発起動: `npm run dev`
-- lint: `npm run lint`
-- ビルド確認: `npm run build`
-- データ保存: 現在はブラウザの `localStorage`
-- ロケナウOCR: ブラウザ側の無料OCR方式
-- バックアップ: プロフィール画面からJSONを書き出し・読み込み
-- 外部ニュース: `NEWS_RSS_URL` または `NEWS_API_PROVIDER` / `NEWS_API_KEY` で取得
+- 公開URLはVercelのProduction Deployment URLです。
+- GitHub URLはコード置き場です。
+- Firebase共有は `ubalog_records` と `ubalog_realtime_offers` を対象にしています。
+- Firebase設定がない場合も、ブラウザのlocalStorageで動作します。
+- Firestore Rulesは本格運用前に締める必要があります。
+- ロケナウOCRの補正や精度改善は公開後に改善します。
 
-## Vercelメモ
+## Firebase
 
-Vercelへ公開する前に `npm run lint` と `npm run build` が通ることを確認します。
-配達中テストの前には、プロフィール画面からバックアップを書き出しておくと安心です。
+Firebase設定は任意です。使う場合は `.env.local` とVercel Environment Variablesに以下を設定します。
 
-## 外部ニュース設定
+```bash
+NEXT_PUBLIC_FIREBASE_API_KEY=
+NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN=
+NEXT_PUBLIC_FIREBASE_PROJECT_ID=
+NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET=
+NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID=
+NEXT_PUBLIC_FIREBASE_APP_ID=
+```
 
-`.env.local.example` を参考に、必要な場合だけ `.env.local` に設定します。
-APIキーの値はリポジトリへ含めません。
-外部ニュースは `/api/news` 経由で取得します。
-`NEWS_RSS_URL` がある場合はRSSを優先し、外部ニュース未設定でも個人ニュースは動作します。
+詳しいメモは [FIREBASE_SETUP.md](./FIREBASE_SETUP.md) を確認してください。
+
+## 外部ニュース
+
+必要に応じて以下を設定します。
+
+```bash
+NEWS_RSS_URL=
+NEWS_API_PROVIDER=
+NEWS_API_KEY=
+```
