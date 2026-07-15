@@ -654,17 +654,21 @@ export default function RealtimeBoard() {
 
   return (
     <main className="relative mx-auto h-[100dvh] w-full max-w-[430px] overflow-hidden bg-gray-50">
-      <AppHeader title="リアルタイム共有" />
+      <AppHeader
+        title="リアルタイム共有"
+        leftAction={
+          <button
+            type="button"
+            onClick={() => setHelpOpen(true)}
+            className="rounded-full bg-white/15 px-2.5 py-2 text-xs font-bold active:scale-95"
+          >
+            使い方
+          </button>
+        }
+      />
       <Toast message={toastMessage} show={showToast} />
 
-      <section className="relative h-[calc(100dvh-14rem-env(safe-area-inset-bottom))] min-h-[300px] w-full max-w-full overflow-hidden bg-green-50">
-        <button
-          type="button"
-          onClick={() => setHelpOpen(true)}
-          className="absolute left-3 top-3 z-[570] rounded-full bg-white/95 px-3 py-1.5 text-xs font-black text-green-700 shadow-sm ring-1 ring-green-100"
-        >
-          使い方
-        </button>
+      <section className="relative h-[calc(100dvh-8rem-env(safe-area-inset-bottom))] min-h-[430px] w-full max-w-full overflow-hidden bg-green-50">
         <RealtimeMap
           center={mapCenter}
           offers={locatedOffers}
@@ -692,7 +696,7 @@ export default function RealtimeBoard() {
         </div>
 
         {!(positionMode === "map" && shareInputOpen && !shareOpen) && (
-        <div className="absolute bottom-40 right-4 z-[560] flex flex-col items-center gap-3">
+        <div className="absolute bottom-28 right-4 z-[560] flex flex-col items-center gap-3">
           <button
             type="button"
             onClick={openShareSheet}
@@ -704,7 +708,7 @@ export default function RealtimeBoard() {
         )}
 
         {!(positionMode === "map" && shareInputOpen && !shareOpen) && (
-          <div className="absolute bottom-5 left-3 right-3 z-[540] max-w-[calc(100%-1.5rem)] rounded-2xl bg-white/95 p-2 shadow-lg">
+          <div className="absolute bottom-3 left-3 right-3 z-[540] max-w-[calc(100%-1.5rem)] rounded-2xl bg-white/95 p-2 shadow-lg">
             <div className="grid grid-cols-5 gap-1">
               <button
                 type="button"
@@ -767,7 +771,7 @@ export default function RealtimeBoard() {
         )}
 
         {positionMode === "map" && shareInputOpen && !shareOpen && (
-          <div className="absolute bottom-40 left-3 right-3 z-[560] max-w-[406px]">
+          <div className="absolute bottom-28 left-3 right-3 z-[560] max-w-[406px]">
             <ShareSyncFooter
               amountNumber={amountNumber}
               distanceNumber={distanceNumber}
@@ -1191,9 +1195,23 @@ function BottomSheet({
   children: ReactNode;
   onClose: () => void;
 }) {
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") onClose();
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [onClose]);
+
   return (
-    <div className="fixed inset-y-0 left-1/2 z-[700] flex w-full max-w-[430px] -translate-x-1/2 items-end justify-center overflow-x-hidden bg-black/30">
-      <div className="w-full max-w-[430px] overflow-hidden rounded-t-3xl bg-white p-3 shadow-2xl">
+    <div
+      className="fixed inset-y-0 left-1/2 z-[700] flex w-full max-w-[430px] -translate-x-1/2 items-end justify-center overflow-x-hidden bg-black/30"
+      onClick={onClose}
+    >
+      <div
+        className="w-full max-w-[430px] overflow-hidden rounded-t-3xl bg-white p-3 shadow-2xl"
+        onClick={(event) => event.stopPropagation()}
+      >
         <div className="mb-3 flex items-center justify-between">
           <div className="text-lg font-bold text-gray-900">{title}</div>
           <button

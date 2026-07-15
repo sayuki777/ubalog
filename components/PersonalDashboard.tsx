@@ -134,7 +134,8 @@ function loadRecords(): StoredRecord[] {
   if (!raw) return [];
 
   try {
-    return JSON.parse(raw) as StoredRecord[];
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? (parsed as StoredRecord[]) : [];
   } catch {
     return [];
   }
@@ -221,21 +222,6 @@ export default function PersonalDashboard() {
   return (
     <div className="mt-4 space-y-3">
       <section className="rounded-2xl bg-white p-3 shadow-sm">
-        <div className="hidden">
-          <div>
-            {displayName !== "匿名配達員" && (
-              <p className="mt-1 font-bold text-green-700">
-                <span className="text-base">{displayName}</span>
-                <span className="px-0.5 text-xs">の</span>
-                <span className="text-sm">{activeTab === "score" ? "成績" : "目標"}</span>
-              </p>
-            )}
-          </div>
-          <div className="text-sm font-bold text-gray-900">
-            {formatMonthLabel(currentMonth)}
-          </div>
-        </div>
-
         <div className="grid grid-cols-2 gap-2 rounded-2xl bg-gray-100 p-1">
           <button
             type="button"
@@ -246,7 +232,7 @@ export default function PersonalDashboard() {
                 : "text-gray-600"
             }`}
           >
-            成績
+            個人成績
           </button>
           <button
             type="button"
@@ -277,7 +263,7 @@ export default function PersonalDashboard() {
                       (stat.label === "昨日" && hasHighlight("yesterday", highlight)) ||
                       (stat.label === "今週" && hasHighlight("thisWeek", highlight)) ||
                       (stat.label === "先週" && hasHighlight("lastWeek", highlight)) ||
-                      (stat.label === "月最高売上" && hasHighlight("monthlyBest", highlight)) ||
+                      (stat.label === "月間最高売上" && hasHighlight("monthlyBest", highlight)) ||
                       (stat.label === "最高単価" && hasHighlight("bestUnitPrice", highlight))
                     }
                   />
@@ -289,14 +275,14 @@ export default function PersonalDashboard() {
 
             {bestRecord && (
               <div className="mt-3 rounded-xl bg-green-50 px-3 py-2 text-xs font-bold text-green-700">
-                最高売上日: {formatDate(bestRecord.date)} /{" "}
+                月間最高売上: {formatDate(bestRecord.date)} /{" "}
                 {formatCurrency(bestRecord.total)}
               </div>
             )}
 
             {best3.length > 0 && (
               <div className="mt-4 rounded-2xl bg-green-50 p-3">
-                <div className="text-sm font-bold text-green-800">今月ベスト3日</div>
+                <div className="text-sm font-bold text-green-800">今月ベスト日</div>
                 <div className="mt-2 space-y-2">
                   {best3.map((record, index) => (
                     <div
@@ -319,86 +305,86 @@ export default function PersonalDashboard() {
           <PerformanceComparePanel records={personalRecords} />
 
           <section className="rounded-2xl bg-white p-4 shadow-sm">
-        <div className="mb-3 flex items-center justify-between">
-          <button
-            type="button"
-            onClick={() => changeMonth(-1)}
-            className="flex h-9 w-9 items-center justify-center rounded-full border border-green-200 text-lg font-bold text-green-700"
-            aria-label="前月"
-          >
-            ＜
-          </button>
-          <div className="text-sm font-bold text-gray-900">
-            {formatMonthLabel(currentMonth)}
-          </div>
-          <button
-            type="button"
-            onClick={() => changeMonth(1)}
-            className="flex h-9 w-9 items-center justify-center rounded-full border border-green-200 text-lg font-bold text-green-700"
-            aria-label="次月"
-          >
-            ＞
-          </button>
-        </div>
-
-        <div className="grid grid-cols-7 gap-1 text-center text-[11px] font-bold text-gray-400">
-          <div>日</div>
-          <div>月</div>
-          <div>火</div>
-          <div>水</div>
-          <div>木</div>
-          <div>金</div>
-          <div>土</div>
-        </div>
-        <div className="mt-2 grid grid-cols-7 gap-1">
-          {calendarDays.map((cell, index) => {
-            if (!cell.iso || !cell.day) {
-              return <div key={`empty-${index}`} className="h-[68px]" />;
-            }
-            const record = monthMap.get(cell.iso);
-            const holiday = isHolidayOrWeekend(cell.iso);
-            const today = cell.iso === todayIsoDate();
-            const highSales =
-              Boolean(record) && Boolean(bestRecord) && record?.date === bestRecord?.date;
-
-            return (
+            <div className="mb-3 flex items-center justify-between">
               <button
-                key={cell.iso}
                 type="button"
-                onClick={() => setSelectedDate(cell.iso ?? todayIsoDate())}
-                className={`flex h-[68px] flex-col rounded-lg border px-0.5 py-1 text-left transition active:scale-[0.98] ${
-                  selectedDate === cell.iso
-                    ? "border-green-600 bg-green-100 ring-2 ring-green-100"
-                    : highSales
-                    ? "border-green-300 bg-emerald-50"
-                    : record
-                    ? "border-green-200 bg-green-50"
-                    : holiday
-                    ? "border-amber-100 bg-amber-50"
-                    : "border-gray-200 bg-white"
-                }`}
+                onClick={() => changeMonth(-1)}
+                className="flex h-9 w-9 items-center justify-center rounded-full border border-green-200 text-lg font-bold text-green-700"
+                aria-label="前月"
               >
-                <span
-                  className={`flex h-5 min-w-5 items-center justify-center rounded-full text-[11px] font-bold ${
-                    today
-                      ? "bg-green-600 text-white"
-                      : holiday
-                      ? "text-amber-700"
-                      : "text-gray-800"
-                  }`}
-                >
-                  {cell.day}
-                </span>
-                <span className="mt-auto w-full text-center text-[9px] font-black leading-tight text-green-700">
-                  {record ? formatCalendarAmount(record.total) : ""}
-                </span>
+                ‹
               </button>
-            );
-          })}
-        </div>
+              <div className="text-sm font-bold text-gray-900">
+                {formatMonthLabel(currentMonth)}
+              </div>
+              <button
+                type="button"
+                onClick={() => changeMonth(1)}
+                className="flex h-9 w-9 items-center justify-center rounded-full border border-green-200 text-lg font-bold text-green-700"
+                aria-label="次月"
+              >
+                ›
+              </button>
+            </div>
 
-        <DayDetailCard date={selectedDate} record={selectedRecord} />
-      </section>
+            <div className="grid grid-cols-7 gap-1 text-center text-[11px] font-bold text-gray-400">
+              <div>日</div>
+              <div>月</div>
+              <div>火</div>
+              <div>水</div>
+              <div>木</div>
+              <div>金</div>
+              <div>土</div>
+            </div>
+            <div className="mt-2 grid grid-cols-7 gap-1">
+              {calendarDays.map((cell, index) => {
+                if (!cell.iso || !cell.day) {
+                  return <div key={`empty-${index}`} className="h-[68px]" />;
+                }
+                const record = monthMap.get(cell.iso);
+                const holiday = isHolidayOrWeekend(cell.iso);
+                const today = cell.iso === todayIsoDate();
+                const highSales =
+                  Boolean(record) && Boolean(bestRecord) && record?.date === bestRecord?.date;
+
+                return (
+                  <button
+                    key={cell.iso}
+                    type="button"
+                    onClick={() => setSelectedDate(cell.iso ?? todayIsoDate())}
+                    className={`flex h-[68px] flex-col rounded-lg border px-0.5 py-1 text-left transition active:scale-[0.98] ${
+                      selectedDate === cell.iso
+                        ? "border-green-600 bg-green-100 ring-2 ring-green-100"
+                        : highSales
+                        ? "border-green-300 bg-emerald-50"
+                        : record
+                        ? "border-green-200 bg-green-50"
+                        : holiday
+                        ? "border-amber-100 bg-amber-50"
+                        : "border-gray-200 bg-white"
+                    }`}
+                  >
+                    <span
+                      className={`flex h-5 min-w-5 items-center justify-center rounded-full text-[11px] font-bold ${
+                        today
+                          ? "bg-green-600 text-white"
+                          : holiday
+                          ? "text-amber-700"
+                          : "text-gray-800"
+                      }`}
+                    >
+                      {cell.day}
+                    </span>
+                    <span className="mt-auto w-full text-center text-[9px] font-black leading-tight text-green-700">
+                      {record ? formatCalendarAmount(record.total) : ""}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+
+            <DayDetailCard date={selectedDate} record={selectedRecord} />
+          </section>
 
           <MonthlyTable records={monthRecords} onSelectDate={setSelectedDate} />
         </>
@@ -417,7 +403,7 @@ export default function PersonalDashboard() {
 function NewBadge() {
   return (
     <span className="rounded-full bg-pink-100 px-1.5 py-0.5 text-[9px] font-black text-pink-600">
-      NEW! ✨
+      NEW!
     </span>
   );
 }
@@ -495,7 +481,7 @@ function DayDetailCard({
         </>
       ) : (
         <div className="mt-3 rounded-xl bg-white px-3 py-3 text-xs font-bold text-gray-600">
-          日付を選んだ状態で記録画面を開きます
+          日付を選んだ状態で記録画面を開けます
         </div>
       )}
     </div>

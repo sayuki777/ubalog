@@ -43,10 +43,20 @@ type StoredRecord = {
   total: number;
   ranking?: boolean;
   hourly?: number;
+  workMinutes?: number;
+  services?: Partial<Record<ServiceKey, { amount?: number; deliveries?: number }>>;
 };
+
+type ServiceKey = "uber" | "demae" | "menu" | "rocket" | "other";
+type RankingTab = "sales" | "hourly" | "deliveries";
 
 const RECORDS_STORAGE_KEY = "ubalog-records";
 const PROFILE_STORAGE_KEY = "ubalog-profile";
+const rankingTabs: { key: RankingTab; label: string }[] = [
+  { key: "sales", label: "売上" },
+  { key: "hourly", label: "時給" },
+  { key: "deliveries", label: "件数" },
+];
 
 const menuCards = [
   {
@@ -148,6 +158,30 @@ function displayNameFromProfile(profile: Profile | null) {
   return getDisplayNameFromProfileOrUser(profile, getActiveUser());
 }
 
+function totalDeliveries(record: StoredRecord) {
+  return (Object.keys(record.services ?? {}) as ServiceKey[]).reduce(
+    (sum, key) => sum + (record.services?.[key]?.deliveries ?? 0),
+    0
+  );
+}
+
+function hourlyValue(record: StoredRecord) {
+  if (typeof record.hourly === "number" && record.hourly > 0) return record.hourly;
+  if (!record.workMinutes) return 0;
+  return Math.floor(record.total / (record.workMinutes / 60));
+}
+
+function rankingValue(record: StoredRecord, tab: RankingTab) {
+  if (tab === "hourly") return hourlyValue(record);
+  if (tab === "deliveries") return totalDeliveries(record);
+  return record.total;
+}
+
+function formatRankingValue(value: number, tab: RankingTab) {
+  if (tab === "deliveries") return `${value.toLocaleString()}件`;
+  return `￥${value.toLocaleString()}`;
+}
+
 export default function HomeDashboard() {
   const [records, setRecords] = useState<StoredRecord[]>([]);
   const [displayName, setDisplayName] = useState("匿名配達員");
@@ -156,6 +190,7 @@ export default function HomeDashboard() {
   const [todayGoal, setTodayGoal] = useState(0);
   const [mainService, setMainService] = useState("");
   const [onboardingDismissed, setOnboardingDismissed] = useState(false);
+  const [rankingTab, setRankingTab] = useState<RankingTab>("sales");
 
   useEffect(() => {
     const load = () => {
@@ -230,8 +265,16 @@ export default function HomeDashboard() {
 
   const yesterdayTop3 = useMemo(() => {
     return records
-      .filter((item) => item.date === yesterday && item.ranking !== false && item.total > 0)
+      .filter(
+        (item) =>
+          item.date === yesterday &&
+          item.ranking !== false &&
+          item.total > 0 &&
+          rankingValue(item, rankingTab) > 0
+      )
       .sort((a, b) => {
+        const diff = rankingValue(b, rankingTab) - rankingValue(a, rankingTab);
+        if (diff !== 0) return diff;
         if (b.total !== a.total) return b.total - a.total;
         return (b.hourly ?? 0) - (a.hourly ?? 0);
       })
@@ -244,9 +287,9 @@ export default function HomeDashboard() {
           item.rankingName?.trim() ||
           item.nickname?.trim() ||
           displayName,
-        amount: item.total,
+        value: rankingValue(item, rankingTab),
       }));
-  }, [displayName, records, yesterday]);
+  }, [displayName, rankingTab, records, yesterday]);
 
   const hasTodayHighlight =
     highlight?.recordDate === today && hasHighlight("today", highlight);
@@ -298,6 +341,22 @@ export default function HomeDashboard() {
 
         <section className="mt-4 rounded-2xl bg-white p-4 shadow-sm">
           <div className="text-base font-bold text-gray-900">前日のランキング TOP3</div>
+          <div className="mt-3 grid grid-cols-3 gap-1 rounded-2xl bg-gray-100 p-1">
+            {rankingTabs.map((tab) => (
+              <button
+                key={tab.key}
+                type="button"
+                onClick={() => setRankingTab(tab.key)}
+                className={`h-8 rounded-xl text-xs font-black ${
+                  rankingTab === tab.key
+                    ? "bg-green-600 text-white shadow-sm"
+                    : "text-gray-600"
+                }`}
+              >
+                {tab.label}
+              </button>
+            ))}
+          </div>
 
           <div className="mt-3 space-y-3">
             {yesterdayTop3.length === 0 ? (
@@ -326,7 +385,7 @@ export default function HomeDashboard() {
                   </div>
 
                   <div className="text-sm font-bold text-gray-900">
-                    ￥{item.amount.toLocaleString()}
+                    {formatRankingValue(item.value, rankingTab)}
                   </div>
                 </div>
               ))

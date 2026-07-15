@@ -172,11 +172,11 @@ export function getFixedPerformanceStats(records: PerformanceRecord[], baseDate 
     { label: "昨日", value: getMetricValue(records, dayRanges[1], "all", "sales"), format: "money" },
     { label: "今週", value: getMetricValue(records, weekRanges[0], "all", "sales"), format: "money" },
     { label: "先週", value: getMetricValue(records, weekRanges[1], "all", "sales"), format: "money" },
-    { label: "日平均", value: aggregate(monthRecords, "all").averageDaily, format: "money" },
+    { label: "日給平均", value: aggregate(monthRecords, "all").averageDaily, format: "money" },
     { label: "", value: null, format: "money" },
-    { label: "平日平均", value: aggregate(weekdayRecords, "all").averageDaily, format: "money" },
-    { label: "休日平均", value: aggregate(holidayRecords, "all").averageDaily, format: "money" },
-    { label: "月最高売上", value: bestSales || null, format: "money" },
+    { label: "平日日給平均", value: aggregate(weekdayRecords, "all").averageDaily, format: "money" },
+    { label: "休日給平均", value: aggregate(holidayRecords, "all").averageDaily, format: "money" },
+    { label: "月間最高売上", value: bestSales || null, format: "money" },
     { label: "最高単価", value: bestUnitPrice || null, format: "unit" },
   ] as const;
 }
@@ -192,8 +192,13 @@ export function formatPerformanceValue(
     return `${hours}:${String(minutes).padStart(2, "0")}`;
   }
   if (metricOrFormat === "deliveries" || metricOrFormat === "count") return `${value}件`;
-  if (metricOrFormat === "unitPrice" || metricOrFormat === "minUnitPrice" || metricOrFormat === "maxUnitPrice" || metricOrFormat === "unit") {
-    return `¥${value.toLocaleString()}/件`;
+  if (
+    metricOrFormat === "unitPrice" ||
+    metricOrFormat === "minUnitPrice" ||
+    metricOrFormat === "maxUnitPrice" ||
+    metricOrFormat === "unit"
+  ) {
+    return `￥${value.toLocaleString()}/件`;
   }
-  return `¥${value.toLocaleString()}`;
+  return `￥${value.toLocaleString()}`;
 }

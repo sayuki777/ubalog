@@ -13,6 +13,8 @@ import { createUserFromInput, setActiveUser } from "@/lib/users";
 const STORAGE_KEY = "ubalog-profile";
 const RECORDS_STORAGE_KEY = "ubalog-records";
 const serviceOptions = ["", "Uber", "出前館", "menu", "Rocket", "その他"];
+const workStyleOptions = ["", "本業", "副業"];
+const vehicleTypeOptions = ["", "バイク", "自転車", "軽貨物", "徒歩"];
 
 type Profile = {
   displayName: string;
@@ -26,6 +28,8 @@ type Profile = {
   subService: string;
   subSubService: string;
   subSubSubService: string;
+  workStyle: string;
+  vehicleType: string;
   rankingName: string;
   xAccount: string;
   openChatName: string;
@@ -43,6 +47,8 @@ const initialProfile: Profile = {
   subService: "",
   subSubService: "",
   subSubSubService: "",
+  workStyle: "",
+  vehicleType: "",
   rankingName: "",
   xAccount: "",
   openChatName: "",
@@ -122,6 +128,8 @@ export default function ProfilePage() {
       displayName,
       name: displayName,
       realName: profile.realName.trim(),
+      workStyle: profile.workStyle.trim(),
+      vehicleType: profile.vehicleType.trim(),
       xAccount: profile.xAccount.trim(),
       openChatName: profile.openChatName.trim(),
       region: getRegionByPrefecture(profile.prefecture),
@@ -232,6 +240,34 @@ export default function ProfilePage() {
               value={profile.subService}
               onChange={(value) => updateField("subService", value)}
             />
+
+            <Field label="本業/副業">
+              <select
+                value={profile.workStyle}
+                onChange={(e) => updateField("workStyle", e.target.value)}
+                className="h-10 w-full rounded-xl border border-gray-200 bg-white px-3 text-sm outline-none focus:border-green-500 focus:ring-2 focus:ring-green-100"
+              >
+                {workStyleOptions.map((item) => (
+                  <option key={`work-style-${item || "empty"}`} value={item}>
+                    {item || "未選択"}
+                  </option>
+                ))}
+              </select>
+            </Field>
+
+            <Field label="乗り物">
+              <select
+                value={profile.vehicleType}
+                onChange={(e) => updateField("vehicleType", e.target.value)}
+                className="h-10 w-full rounded-xl border border-gray-200 bg-white px-3 text-sm outline-none focus:border-green-500 focus:ring-2 focus:ring-green-100"
+              >
+                {vehicleTypeOptions.map((item) => (
+                  <option key={`vehicle-type-${item || "empty"}`} value={item}>
+                    {item || "未選択"}
+                  </option>
+                ))}
+              </select>
+            </Field>
 
             <Field label="Xアカウント">
               <input
