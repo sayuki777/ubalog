@@ -3,9 +3,11 @@
 import { useRef, useState } from "react";
 import {
   downloadUbalogBackup,
+  getUbalogBackupSummary,
   restoreUbalogBackup,
   validateUbalogBackup,
   type UbalogBackupData,
+  type UbalogBackupSummary,
 } from "@/lib/backup";
 
 function formatExportedAt(iso: string) {
@@ -24,13 +26,14 @@ function formatExportedAt(iso: string) {
 export default function DataBackupPanel() {
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const [pendingBackup, setPendingBackup] = useState<UbalogBackupData | null>(null);
+  const [pendingSummary, setPendingSummary] = useState<UbalogBackupSummary | null>(null);
   const [message, setMessage] = useState("");
-  const [errorMessage, setErrorMessage] = useState("");
+  const [notice, setNotice] = useState("");
   const [restored, setRestored] = useState(false);
 
   const clearStatus = () => {
     setMessage("");
-    setErrorMessage("");
+    setNotice("");
     setRestored(false);
   };
 
@@ -43,6 +46,7 @@ export default function DataBackupPanel() {
   const handleFileSelect = async (file: File | undefined) => {
     clearStatus();
     setPendingBackup(null);
+    setPendingSummary(null);
     if (!file) return;
 
     try {
@@ -50,14 +54,14 @@ export default function DataBackupPanel() {
       const parsed = JSON.parse(text) as unknown;
 
       if (!validateUbalogBackup(parsed)) {
-        setErrorMessage("バックアップファイルを確認してください");
+        setNotice("バックアップファイルを読み込めませんでした");
         return;
       }
 
       setPendingBackup(parsed);
-    } catch (error) {
-      console.error("Failed to read backup file", error);
-      setErrorMessage("バックアップファイルを確認してください");
+      setPendingSummary(getUbalogBackupSummary(parsed));
+    } catch {
+      setNotice("バックアップファイルを読み込めませんでした");
     }
   };
 
@@ -66,8 +70,9 @@ export default function DataBackupPanel() {
 
     restoreUbalogBackup(pendingBackup);
     setPendingBackup(null);
+    setPendingSummary(null);
     setRestored(true);
-    setMessage("復元しました。画面を更新してください");
+    setMessage("読み込みました");
   };
 
   return (
@@ -84,9 +89,12 @@ export default function DataBackupPanel() {
       />
 
       <div>
-        <h2 className="text-lg font-bold text-gray-900">データのバックアップ</h2>
-        <p className="mt-1 text-sm text-gray-500">
-          記録・目標・ニュースなどを保存できます
+        <h2 className="text-lg font-black text-gray-900">
+          データのバックアップ・引き継ぎ
+        </h2>
+        <p className="mt-2 text-sm font-bold leading-6 text-gray-600">
+          ログインなしでも使えますが、端末やブラウザを変えると端末内の記録が見えなくなる場合があります。
+          大事な記録はバックアップしておくと安心です。
         </p>
       </div>
 
@@ -94,9 +102,9 @@ export default function DataBackupPanel() {
         <button
           type="button"
           onClick={handleDownload}
-          className="h-12 rounded-xl bg-green-600 px-4 text-sm font-bold text-white shadow-sm active:scale-[0.99]"
+          className="h-12 rounded-xl bg-green-600 px-4 text-sm font-black text-white shadow-sm active:scale-[0.99]"
         >
-          バックアップを作成
+          バックアップを書き出す
         </button>
 
         <button
@@ -105,70 +113,77 @@ export default function DataBackupPanel() {
             clearStatus();
             fileInputRef.current?.click();
           }}
-          className="h-12 rounded-xl border border-green-600 bg-white px-4 text-sm font-bold text-green-700 active:bg-green-50"
+          className="h-12 rounded-xl border border-green-600 bg-white px-4 text-sm font-black text-green-700 active:bg-green-50"
         >
-          バックアップを復元
+          バックアップを読み込む
         </button>
       </div>
 
-      {pendingBackup && (
+      <div className="mt-4 rounded-2xl bg-gray-50 p-3">
+        <div className="text-xs font-black text-gray-700">バックアップのメモ</div>
+        <ul className="mt-2 space-y-1 text-xs font-bold leading-5 text-gray-500">
+          <li>バックアップファイルには記録やプロフィール情報が含まれます</li>
+          <li>他人に共有しないでください</li>
+          <li>機種変更前に保存しておくと安心です</li>
+        </ul>
+      </div>
+
+      {pendingBackup && pendingSummary && (
         <div className="mt-4 rounded-2xl border border-green-100 bg-green-50 p-3">
-          <div className="text-sm font-bold text-gray-900">
-            このバックアップを復元しますか？
+          <div className="text-sm font-black text-gray-900">
+            読み込むと、この端末のウバログデータに上書き・追加されます。よろしいですか？
           </div>
-          <p className="mt-1 text-xs font-bold text-gray-600">
-            ウバログの保存データを、選んだファイルの内容に置き換えます
+          <p className="mt-2 text-xs font-bold leading-5 text-gray-600">
+            記録とリアルタイム共有は、できるだけ重複しないようにまとめます。
+            プロフィールなどはファイルの内容で更新されます。
           </p>
 
           <div className="mt-3 grid grid-cols-2 gap-2 text-xs font-bold text-gray-700">
             <div className="rounded-xl bg-white px-3 py-2">
-              記録件数: {pendingBackup.records.length}件
+              記録: {pendingSummary.recordCount}件
             </div>
             <div className="rounded-xl bg-white px-3 py-2">
-              ユーザー数: {pendingBackup.users.length}件
+              共有: {pendingSummary.realtimeOfferCount}件
             </div>
             <div className="rounded-xl bg-white px-3 py-2">
-              目標: {pendingBackup.goals?.length ?? 0}件
+              データ: {pendingSummary.keyCount}種類
             </div>
             <div className="rounded-xl bg-white px-3 py-2">
-              ニュース: {pendingBackup.news?.length ?? 0}件
-            </div>
-            <div className="rounded-xl bg-white px-3 py-2">
-              リアルタイム共有: {pendingBackup.realtimeOffers.length}件
-            </div>
-            <div className="rounded-xl bg-white px-3 py-2">
-              書き出し日時: {formatExportedAt(pendingBackup.exportedAt)}
+              日時: {formatExportedAt(pendingSummary.exportedAt)}
             </div>
           </div>
 
           <div className="mt-3 grid grid-cols-2 gap-2">
             <button
               type="button"
-              onClick={() => setPendingBackup(null)}
-              className="h-11 rounded-xl border border-gray-200 bg-white text-sm font-bold text-gray-600 active:bg-gray-50"
+              onClick={() => {
+                setPendingBackup(null);
+                setPendingSummary(null);
+              }}
+              className="h-11 rounded-xl border border-gray-200 bg-white text-sm font-black text-gray-600 active:bg-gray-50"
             >
-              キャンセル
+              やめる
             </button>
             <button
               type="button"
               onClick={handleRestore}
-              className="h-11 rounded-xl bg-green-600 text-sm font-bold text-white shadow-sm active:scale-[0.99]"
+              className="h-11 rounded-xl bg-green-600 text-sm font-black text-white shadow-sm active:scale-[0.99]"
             >
-              復元する
+              読み込む
             </button>
           </div>
         </div>
       )}
 
       {message && (
-        <div className="mt-3 rounded-xl bg-green-50 px-3 py-2 text-sm font-bold text-green-700">
+        <div className="mt-3 rounded-xl bg-green-50 px-3 py-2 text-sm font-black text-green-700">
           {message}
         </div>
       )}
 
-      {errorMessage && (
-        <div className="mt-3 rounded-xl bg-amber-50 px-3 py-2 text-sm font-bold text-amber-700">
-          {errorMessage}
+      {notice && (
+        <div className="mt-3 rounded-xl bg-amber-50 px-3 py-2 text-sm font-black text-amber-700">
+          {notice}
         </div>
       )}
 
@@ -176,9 +191,9 @@ export default function DataBackupPanel() {
         <button
           type="button"
           onClick={() => window.location.reload()}
-          className="mt-3 h-11 w-full rounded-xl border border-green-600 bg-white text-sm font-bold text-green-700 active:bg-green-50"
+          className="mt-3 h-11 w-full rounded-xl border border-green-600 bg-white text-sm font-black text-green-700 active:bg-green-50"
         >
-          画面を更新
+          画面を更新する
         </button>
       )}
     </section>
