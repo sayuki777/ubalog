@@ -26,6 +26,9 @@ npm run build
 - PWA manifest は `public/manifest.json` です。
 - ホーム画面追加用アイコンは `public/icon-192.png` / `public/icon-512.png` です。
 - 初回向けガイドは `components/BeginnerGuide.tsx` です。
+- `/feedback` に不具合報告・要望導線を掲載しています。
+- GoogleフォームURLは `NEXT_PUBLIC_UBALOG_FEEDBACK_FORM_URL` / `NEXT_PUBLIC_UBALOG_REQUEST_FORM_URL` で差し替え可能です。
+- X投稿リンクからの報告も使えます。
 - 本格デザインは後で差し替え可能です。
 
 ## Firebase
