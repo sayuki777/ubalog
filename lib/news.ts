@@ -59,6 +59,7 @@ export type UbalogNewsItem = {
     | "breaking";
   publishedAt: string;
   recordDate?: string;
+  offerId?: string;
   periodStart?: string;
   periodEnd?: string;
   areaScope?: NewsAreaScope;
@@ -309,6 +310,7 @@ function normalizeNewsItem(item: unknown): UbalogNewsItem | null {
     iconType: raw.iconType ?? (type ? iconForType(type) : "news"),
     publishedAt: typeof raw.publishedAt === "string" ? raw.publishedAt : createdAt,
     recordDate,
+    offerId: typeof raw.offerId === "string" ? raw.offerId : undefined,
     periodStart: typeof raw.periodStart === "string" ? raw.periodStart : undefined,
     periodEnd: typeof raw.periodEnd === "string" ? raw.periodEnd : undefined,
     areaScope: raw.areaScope,
@@ -528,7 +530,7 @@ export function addBreakingRecordNews(record: NewsRecord) {
   });
 }
 
-export function addBreakingRealtimeNews(input: { name?: string; amount?: number; service?: string }) {
+export function addBreakingRealtimeNews(input: { name?: string; amount?: number; service?: string; offerId?: string }) {
   if (!input.service?.trim()) return;
   if (!input.amount || input.amount <= 0) return;
   const now = new Date().toISOString();
@@ -543,6 +545,7 @@ export function addBreakingRealtimeNews(input: { name?: string; amount?: number;
     message: `${name}がリアルタイム投稿しました🛵`,
     iconType: "breaking",
     publishedAt: now,
+    offerId: input.offerId,
     createdAt: now,
   });
 }

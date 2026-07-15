@@ -11,7 +11,7 @@ type RocketNowShareLike = {
 };
 
 function yen(value: number) {
-  return `¥${Math.max(0, value).toLocaleString()}`;
+  return `¥${Math.max(0, Math.floor(value)).toLocaleString()}`;
 }
 
 function workTime(minutes?: number) {
@@ -49,12 +49,19 @@ export function buildRecordShareText(record: RecordShareLike) {
 
 export function buildUbalogShareText() {
   return [
-    "配達員向け売上記録アプリ「ウバログ」公開中！",
+    "配達記録ランキングアプリ",
+    "「ウバログ」",
     "",
-    "売上記録、ランキング、ニュース、リアルタイム共有ができます。",
-    "フーデリ配達員の記録にどうぞ。",
+    "🏆 全国・都道府県別、エリア別",
+    "🏆 売り上げ、時給、件数別",
+    "🗺 リアルタイム報酬共有",
+    "④ 目標応援ギャル「ユリア」搭載検討中)",
+    "",
+    "ホーム画面にショートカット作って、",
+    "高単価エリアに行こうぜ〜！！",
     "",
     "#ウバログ #フードデリバリー",
+    "https://ubalog.vercel.app",
   ].join("\n");
 }
 
@@ -91,9 +98,9 @@ export function buildRankingShareText() {
 export function openXShare(text: string, url = getShareUrl()) {
   if (typeof window === "undefined") return;
 
-  const params = new URLSearchParams({
-    text,
-    url,
-  });
+  const params = new URLSearchParams({ text });
+  if (url && !text.includes(url) && !text.includes("https://ubalog.vercel.app")) {
+    params.set("url", url);
+  }
   window.open(`https://twitter.com/intent/tweet?${params.toString()}`, "_blank", "noopener,noreferrer");
 }

@@ -114,6 +114,16 @@ function saveOffers(offers: RealtimeOffer[]) {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(offers));
 }
 
+function readOfferIdFromUrl() {
+  if (typeof window === "undefined") return null;
+
+  try {
+    return new URLSearchParams(window.location.search).get("offerId");
+  } catch {
+    return null;
+  }
+}
+
 function loadRocketNowScanFeedbacks(): RocketNowScanFeedback[] {
   if (typeof window === "undefined") return [];
 
@@ -365,25 +375,44 @@ export default function RealtimeBoard() {
     }, 1600);
   };
 
+  const focusRequestedOffer = useCallback((items: RealtimeOffer[]) => {
+    const offerId = readOfferIdFromUrl();
+    if (!offerId) return false;
+
+    const target = items.find((offer) => offer.id === offerId);
+    if (!target) return false;
+
+    setSelectedOfferId(target.id);
+    setListOpen(true);
+    if (typeof target.lat === "number" && typeof target.lng === "number") {
+      setMapCenter([target.lat, target.lng]);
+    }
+    return true;
+  }, []);
+
   useEffect(() => {
     const timer = window.setTimeout(() => {
       const loadedOffers = loadOffers().sort((a, b) =>
         a.createdAt < b.createdAt ? 1 : -1
       );
       setOffers(loadedOffers);
-      setSelectedOfferId(loadedOffers[0]?.id ?? null);
+      if (!focusRequestedOffer(loadedOffers)) {
+        setSelectedOfferId(loadedOffers[0]?.id ?? null);
+      }
       void fetchSharedRealtimeOffers().then((remoteOffers) => {
         if (remoteOffers.length === 0) return;
         const merged = mergeRealtimeOffers(loadedOffers, remoteOffers) as RealtimeOffer[];
         saveOffers(merged);
         setOffers(merged);
-        setSelectedOfferId((current) => current ?? merged[0]?.id ?? null);
+        if (!focusRequestedOffer(merged)) {
+          setSelectedOfferId((current) => current ?? merged[0]?.id ?? null);
+        }
       });
       requestLocation();
     }, 0);
 
     return () => window.clearTimeout(timer);
-  }, [requestLocation]);
+  }, [focusRequestedOffer, requestLocation]);
 
   const amountNumber = parseInt(amount || "0", 10) || 0;
   const distanceNumber = parseFloat(distanceKm || "0") || 0;
@@ -610,6 +639,7 @@ export default function RealtimeBoard() {
       name: newOffer.name,
       amount: newOffer.amount,
       service: newOffer.service,
+      offerId: newOffer.id,
     });
     if (shouldSaveRocketNowFeedback) {
       saveRocketNowScanFeedback({
@@ -688,7 +718,11 @@ export default function RealtimeBoard() {
           }}
         />
 
-        <div className="pointer-events-none absolute right-3 top-3 max-w-[calc(100%-6rem)] rounded-2xl bg-white/95 px-3 py-2 shadow-sm">
+        <div
+          className={`pointer-events-none absolute right-3 max-w-[calc(100%-6rem)] rounded-2xl bg-white/95 px-3 py-2 shadow-sm ${
+            positionMode === "map" && !shareOpen ? "top-16" : "top-3"
+          }`}
+        >
           <div className="text-xs font-bold text-gray-500">表示中</div>
           <div className="text-sm font-bold text-gray-900">
             {filteredOffers.length}件・地図 {locatedOffers.length}件
@@ -763,7 +797,7 @@ export default function RealtimeBoard() {
         )}
 
         {positionMode === "map" && !shareOpen && (
-          <div className="absolute bottom-56 left-4 right-4 z-[520] rounded-2xl bg-white/95 px-4 py-3 text-center text-sm font-bold leading-5 text-gray-800 shadow-lg">
+          <div className="absolute left-3 right-3 top-3 z-[520] rounded-2xl bg-white/95 px-3 py-2 text-center text-xs font-bold leading-5 text-gray-800 shadow-lg">
             {pickedLocation
               ? "地図上で位置指定済み"
               : "地図をタップして共有位置を指定してください"}
@@ -771,7 +805,7 @@ export default function RealtimeBoard() {
         )}
 
         {positionMode === "map" && shareInputOpen && !shareOpen && (
-          <div className="absolute bottom-24 left-3 right-3 z-[560] max-w-[406px]">
+          <div className="absolute bottom-[5.75rem] left-3 right-3 z-[560] max-w-[406px]">
             <ShareSyncFooter
               amountNumber={amountNumber}
               distanceNumber={distanceNumber}

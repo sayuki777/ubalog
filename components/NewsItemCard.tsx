@@ -135,6 +135,18 @@ export default function NewsItemCard({ item }: { item: UbalogNewsItem }) {
     );
   }
 
+  if (item.type === "breaking_realtime") {
+    const href = item.offerId
+      ? `/realtime?offerId=${encodeURIComponent(item.offerId)}`
+      : "/realtime";
+
+    return (
+      <Link href={href} className="block">
+        <Body item={item} />
+      </Link>
+    );
+  }
+
   if (item.recordDate) {
     return (
       <Link href={`/record?date=${item.recordDate}`} className="block">
