@@ -2,7 +2,6 @@
 
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import Link from "next/link";
-import { Camera } from "lucide-react";
 import { useRouter, useSearchParams } from "next/navigation";
 import AppHeader from "@/components/AppHeader";
 import BottomMenu from "@/components/BottomMenu";
@@ -12,7 +11,6 @@ import SaveButton from "@/components/SaveButton";
 import Toast from "@/components/Toast";
 import RocketNowDailyScanGuide from "@/components/RocketNowDailyScanGuide";
 import RocketNowBulkImportPanel from "@/components/RocketNowBulkImportPanel";
-import RocketNowBulkHistoryPanel from "@/components/RocketNowBulkHistoryPanel";
 import { PREFECTURES } from "@/lib/areas";
 import { getMonthlyGoal } from "@/lib/goals";
 import { saveHighlightUpdate, type HighlightField } from "@/lib/highlights";
@@ -31,12 +29,6 @@ import {
   ensureActiveUserFromProfile,
   setActiveUser,
 } from "@/lib/users";
-import {
-  readRocketNowDailyFromImage,
-  readRocketNowDailyFromVideo,
-  type RocketNowDailyOcrResult,
-} from "@/lib/rocketNowDailyOcr";
-import { saveSingleScanFeedback } from "@/lib/rocketNowOcrFeedback";
 import { saveRecordWithSync } from "@/lib/sharedRecords";
 import { buildRecordShareText, openXShare } from "@/lib/share";
 
@@ -239,19 +231,6 @@ function formatCurrency(amount: number) {
   return `￥${amount.toLocaleString()}`;
 }
 
-function formatShortDateLabel(value: string, fallback?: string) {
-  const matched = fallback?.trim();
-  const dateMatch = matched?.match(/\d{1,2}\s*[\/\-.]\s*\d{1,2}/)?.[0];
-  const [year, month, day] = value.split("-").map(Number);
-  const date = new Date(year, month - 1, day);
-  const weekday = ["日", "月", "火", "水", "木", "金", "土"][date.getDay()];
-  const label = dateMatch
-    ? dateMatch.replace(/\s/g, "").replace(/[-.]/g, "/")
-    : `${String(month).padStart(2, "0")}/${String(day).padStart(2, "0")}`;
-
-  return `${label} ${weekday}`;
-}
-
 function formatBreakMinutes(minutes: number) {
   const h = Math.floor(minutes / 60);
   const m = minutes % 60;
@@ -288,7 +267,7 @@ function roundTimeToFiveMinutes(value: string) {
 export default function RecordForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const rocketDailyFileInputRef = useRef<HTMLInputElement | null>(null);
+  const rocketBulkPanelRef = useRef<HTMLDivElement | null>(null);
 
   const [date, setDate] = useState(todayIsoDate());
   const [startTime, setStartTime] = useState("");
@@ -323,12 +302,7 @@ export default function RecordForm() {
   const [showAfterSaveActions, setShowAfterSaveActions] = useState(false);
   const [afterSaveMessage, setAfterSaveMessage] = useState("");
   const [lastSavedRecord, setLastSavedRecord] = useState<StoredRecord | null>(null);
-  const [rocketDailyScanLoading, setRocketDailyScanLoading] = useState(false);
-  const [rocketDailyScanMessage, setRocketDailyScanMessage] = useState("");
-  const [rocketDailyScanResult, setRocketDailyScanResult] =
-    useState<RocketNowDailyOcrResult | null>(null);
-  const [rocketDailyScanFileType, setRocketDailyScanFileType] =
-    useState<"image" | "video" | null>(null);
+  const [rocketBulkLaunchToken, setRocketBulkLaunchToken] = useState(0);
 
   useEffect(() => {
     const queryDate = searchParams.get("date");
@@ -406,9 +380,6 @@ export default function RecordForm() {
         setComment("");
       }
 
-      setRocketDailyScanResult(null);
-      setRocketDailyScanFileType(null);
-      setRocketDailyScanMessage("");
       setLoaded(true);
     }, 0);
 
@@ -514,44 +485,19 @@ export default function RecordForm() {
         : `あと ${formatCurrency(Math.abs(goalDiff))}`
       : "";
   const showRecordGuide = !recordGuideDismissed && !isEditing && recordCount < 3;
-  const showRocketDailyScanStatus =
-    rocketDailyScanLoading || Boolean(rocketDailyScanMessage) || Boolean(rocketDailyScanResult);
-
   const dismissRecordGuide = () => {
     writeStorageBoolean(RECORD_GUIDE_DISMISSED_KEY, true);
     setRecordGuideDismissed(true);
   };
 
-  const applyRocketDailyScanResult = (
-    result: RocketNowDailyOcrResult,
-    fileType: "image" | "video"
-  ) => {
-    if (typeof result.amount === "number") setRocket(String(result.amount));
-    if (typeof result.deliveries === "number") setRocketCount(String(result.deliveries));
-    setRocketDailyScanResult(result);
-    setRocketDailyScanFileType(fileType);
-    setRocketDailyScanMessage("");
-  };
-
-  const handleRocketDailyScanFile = async (file: File | undefined) => {
-    if (!file || rocketDailyScanLoading) return;
-
-    const fileType: "image" | "video" = file.type.startsWith("video/") ? "video" : "image";
-    setRocketDailyScanLoading(true);
-    setRocketDailyScanMessage("\u8aad\u307f\u53d6\u308a\u4e2d...");
-
-    try {
-      const result = fileType === "video"
-        ? await readRocketNowDailyFromVideo(file, date)
-        : await readRocketNowDailyFromImage(file, date);
-      applyRocketDailyScanResult(result, fileType);
-    } catch {
-      setRocketDailyScanResult(null);
-      setRocketDailyScanFileType(null);
-      setRocketDailyScanMessage("\u8aad\u307f\u53d6\u308c\u307e\u305b\u3093\u3067\u3057\u305f\u3002\u624b\u5165\u529b\u3057\u3066\u304f\u3060\u3055\u3044");
-    } finally {
-      setRocketDailyScanLoading(false);
-    }
+  const openRocketBulkImport = () => {
+    setRocketBulkLaunchToken(Date.now());
+    window.setTimeout(() => {
+      rocketBulkPanelRef.current?.scrollIntoView({
+        behavior: "smooth",
+        block: "center",
+      });
+    }, 50);
   };
 
   const handleSave = () => {
@@ -626,25 +572,6 @@ export default function RecordForm() {
 
     saveRecords(next);
     void saveRecordWithSync(newRecord);
-    if (rocketDailyScanResult && rocketDailyScanFileType) {
-      saveSingleScanFeedback({
-        id: `${now}-${Math.random().toString(36).slice(2)}`,
-        createdAt: now,
-        type: "single",
-        targetDate: date,
-        matchedDateLabel: formatShortDateLabel(
-          date,
-          rocketDailyScanResult.matchedDateLabel
-        ),
-        ocrAmount: rocketDailyScanResult.amount,
-        ocrDeliveries: rocketDailyScanResult.deliveries,
-        baseAmount: rocketDailyScanResult.baseAmount,
-        adjustmentAmount: rocketDailyScanResult.adjustmentAmount,
-        correctedAmount: parseInt(rocket || "0", 10) || 0,
-        correctedDeliveries: parseInt(rocketCount || "0", 10) || 0,
-        fileType: rocketDailyScanFileType,
-      });
-    }
     if (startTime && endTime) {
       saveLastWorkTime({
         startTime,
@@ -896,37 +823,16 @@ export default function RecordForm() {
               count={rocketCount}
               onChange={setRocket}
               onCountChange={setRocketCount}
-              status={showRocketDailyScanStatus ? (
-                <RocketDailyScanStatus
-                  date={date}
-                  loading={rocketDailyScanLoading}
-                  message={rocketDailyScanMessage}
-                  result={rocketDailyScanResult}
-                />
-              ) : undefined}
               scanControl={
-                <>
-                  <input
-                    ref={rocketDailyFileInputRef}
-                    type="file"
-                    accept="image/*,video/*"
-                    className="hidden"
-                    onChange={(event) => {
-                      void handleRocketDailyScanFile(event.target.files?.[0]);
-                      event.target.value = "";
-                    }}
-                  />
-                  <button
-                    type="button"
-                    title={"\u30ed\u30b1\u30ca\u30a6\u65e5\u5225\u58f2\u4e0a\u3092\u8aad\u307f\u53d6\u308b"}
-                    aria-label={"\u30ed\u30b1\u30ca\u30a6\u65e5\u5225\u58f2\u4e0a\u3092\u8aad\u307f\u53d6\u308b"}
-                    disabled={rocketDailyScanLoading}
-                    onClick={() => rocketDailyFileInputRef.current?.click()}
-                    className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-green-200 bg-green-50 text-green-700 active:bg-green-100 disabled:border-gray-200 disabled:bg-gray-50 disabled:text-gray-300"
-                  >
-                    <Camera size={16} strokeWidth={2.5} />
-                  </button>
-                </>
+                <button
+                  type="button"
+                  title="ロケナウ一気読み"
+                  aria-label="ロケナウ一気読み"
+                  onClick={openRocketBulkImport}
+                  className="h-10 shrink-0 rounded-xl border border-green-200 bg-green-50 px-2 text-[11px] font-black text-green-700 active:bg-green-100"
+                >
+                  一気読み
+                </button>
               }
             />
             <Row company="その他" value={other} count={otherCount} onChange={setOther} onCountChange={setOtherCount} />
@@ -986,26 +892,22 @@ export default function RecordForm() {
 
         <div className="mt-4 space-y-3">
           <RocketNowDailyScanGuide />
-          <RocketNowBulkImportPanel
-            selectedDate={date}
-            profile={{
-              name: profileName || "匿名配達員",
-              prefecture,
-              area: profileArea,
-            }}
-            onCurrentDateImported={({ amount, deliveries }) => {
-              setRocket(String(amount));
-              setRocketCount(String(deliveries));
-            }}
-            onSelectDate={setDate}
-          />
-          <RocketNowBulkHistoryPanel
-            selectedDate={date}
-            onCurrentDateRestored={({ amount, deliveries }) => {
-              setRocket(amount > 0 ? String(amount) : "");
-              setRocketCount(deliveries > 0 ? String(deliveries) : "");
-            }}
-          />
+          <div ref={rocketBulkPanelRef}>
+            <RocketNowBulkImportPanel
+              selectedDate={date}
+              profile={{
+                name: profileName || "匿名配達員",
+                prefecture,
+                area: profileArea,
+              }}
+              onCurrentDateImported={({ amount, deliveries }) => {
+                setRocket(String(amount));
+                setRocketCount(String(deliveries));
+              }}
+              onSelectDate={setDate}
+              launchToken={rocketBulkLaunchToken}
+            />
+          </div>
           <RocketNowDisplayResetButton />
         </div>
       </div>
@@ -1097,59 +999,4 @@ function RocketNowDisplayResetButton() {
       </button>
     </div>
   );
-}
-
-function RocketDailyScanStatus({
-  date,
-  loading,
-  message,
-  result,
-}: {
-  date: string;
-  loading: boolean;
-  message: string;
-  result: RocketNowDailyOcrResult | null;
-}) {
-  if (loading) {
-    return (
-      <div className="text-[11px] font-bold text-green-700">
-        読み取り中...
-      </div>
-    );
-  }
-
-  if (result) {
-    const baseAmount = result.baseAmount ?? result.amount ?? 0;
-    const adjustmentAmount = result.adjustmentAmount;
-    const totalAmount = result.amount ?? baseAmount + adjustmentAmount;
-    const deliveries = result.deliveries ?? 0;
-
-    return (
-      <div className="max-w-full rounded-xl bg-green-50 px-2.5 py-2 text-[11px] leading-4 text-green-800">
-        <div className="flex min-w-0 flex-wrap items-center gap-x-1.5 gap-y-0.5 font-black">
-          <span className="rounded-full bg-green-100 px-2 py-0.5 text-[10px] text-green-700">
-            反映済み
-          </span>
-          <span>ロケナウ読取: {formatShortDateLabel(date, result.matchedDateLabel)}</span>
-        </div>
-        <div className="mt-0.5 break-words font-bold">
-          日別 {formatCurrency(baseAmount)}
-          {adjustmentAmount > 0 && (
-            <> + 調整 {formatCurrency(adjustmentAmount)} = {formatCurrency(totalAmount)}</>
-          )}
-          {" / "}配達{deliveries.toLocaleString()}件
-        </div>
-      </div>
-    );
-  }
-
-  if (message) {
-    return (
-      <div className="text-[11px] font-bold text-red-600">
-        {message}
-      </div>
-    );
-  }
-
-  return null;
 }

@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   readRocketNowBulkDailyFromImages,
   type RocketNowBulkDailyResult,
@@ -40,11 +40,13 @@ export default function RocketNowBulkImportPanel({
   profile,
   onCurrentDateImported,
   onSelectDate,
+  launchToken,
 }: {
   selectedDate: string;
   profile: RocketBulkRecordProfile;
   onCurrentDateImported: (value: { amount: number; deliveries: number }) => void;
   onSelectDate: (date: string) => void;
+  launchToken?: number;
 }) {
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const [open, setOpen] = useState(() => {
@@ -77,6 +79,15 @@ export default function RocketNowBulkImportPanel({
       localStorage.setItem(PANEL_OPEN_KEY, String(value));
     }
   };
+
+  useEffect(() => {
+    if (!launchToken) return;
+    const timer = window.setTimeout(() => {
+      setPanelOpen(true);
+      fileInputRef.current?.click();
+    }, 250);
+    return () => window.clearTimeout(timer);
+  }, [launchToken]);
 
   const handleFiles = async (files: FileList | null) => {
     const selectedFiles = Array.from(files ?? []).filter((file) =>
