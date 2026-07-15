@@ -22,6 +22,10 @@ npm run build
 - Googleログインは使っていません。
 - データ保存は localStorage と Firebase Firestore 共有を使っています。
 - ロケナウOCRの補正や精度改善は公開後に改善します。
+- OGP画像は `public/ogp.png` です。
+- PWA manifest は `public/manifest.json` です。
+- ホーム画面追加用アイコンは `public/icon-192.png` / `public/icon-512.png` です。
+- 本格デザインは後で差し替え可能です。
 
 ## Firebase
 
