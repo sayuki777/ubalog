@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import AppHeader from "@/components/AppHeader";
 import AppInstallGuide from "@/components/AppInstallGuide";
+import BeginnerGuide from "@/components/BeginnerGuide";
 import BottomMenu from "@/components/BottomMenu";
 import FooterLinks from "@/components/FooterLinks";
 import FirstStepGuide from "@/components/FirstStepGuide";
@@ -329,6 +330,8 @@ export default function HomeDashboard() {
 
       <div className="px-4 pb-[calc(8rem+env(safe-area-inset-bottom))] pt-4">
         <PersonalNewsCard />
+
+        <BeginnerGuide />
 
         <section className="rounded-2xl bg-white p-4 shadow-sm">
           <div className="grid grid-cols-2 gap-3">

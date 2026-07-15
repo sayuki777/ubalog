@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import AppHeader from "@/components/AppHeader";
+import { BEGINNER_GUIDE_CLOSED_KEY } from "@/components/BeginnerGuide";
 import BottomMenu from "@/components/BottomMenu";
 import DataBackupPanel from "@/components/DataBackupPanel";
 import FooterLinks from "@/components/FooterLinks";
@@ -169,6 +170,11 @@ export default function ProfilePage() {
       setFeedbackCopyMessage("文章を表示しました");
       setFeedbackFallbackText(text);
     }
+  };
+
+  const reopenBeginnerGuide = () => {
+    localStorage.removeItem(BEGINNER_GUIDE_CLOSED_KEY);
+    window.location.href = "/";
   };
 
   if (!loaded) return null;
@@ -338,6 +344,24 @@ export default function ProfilePage() {
             </div>
           </Link>
         )}
+
+        <section className="mt-4 rounded-2xl bg-white p-4 shadow-sm">
+          <div className="flex min-w-0 items-center justify-between gap-3">
+            <div className="min-w-0">
+              <div className="text-sm font-black text-gray-900">使い方を見る</div>
+              <div className="mt-1 text-xs font-bold text-gray-500">
+                初回ガイドをもう一度表示します
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={reopenBeginnerGuide}
+              className="shrink-0 rounded-full border border-green-200 bg-green-50 px-3 py-2 text-xs font-black text-green-700 active:bg-green-100"
+            >
+              開く
+            </button>
+          </div>
+        </section>
 
         <FooterLinks />
       </div>

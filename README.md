@@ -25,6 +25,7 @@ npm run build
 - OGP画像は `public/ogp.png` です。
 - PWA manifest は `public/manifest.json` です。
 - ホーム画面追加用アイコンは `public/icon-192.png` / `public/icon-512.png` です。
+- 初回向けガイドは `components/BeginnerGuide.tsx` です。
 - 本格デザインは後で差し替え可能です。
 
 ## Firebase

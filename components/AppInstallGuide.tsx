@@ -44,7 +44,7 @@ export default function AppInstallGuide() {
             steps={[
               "Safariでウバログを開く",
               "共有ボタンを押す",
-              "「ホーム画面に追加」を選ぶ",
+              "ホーム画面に追加を選ぶ",
               "追加を押す",
             ]}
           />
@@ -53,7 +53,7 @@ export default function AppInstallGuide() {
             steps={[
               "Chromeでウバログを開く",
               "右上メニューを押す",
-              "「ホーム画面に追加」を選ぶ",
+              "ホーム画面に追加を選ぶ",
               "追加を押す",
             ]}
           />
