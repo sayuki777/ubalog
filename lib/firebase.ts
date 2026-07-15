@@ -14,9 +14,16 @@ function hasFirebaseConfig() {
   return Object.values(firebaseConfig).every((value) => Boolean(value));
 }
 
-export const firebaseApp: FirebaseApp | null = hasFirebaseConfig()
-  ? getApps()[0] ?? initializeApp(firebaseConfig)
-  : null;
+function createFirebaseApp(): FirebaseApp | null {
+  if (!hasFirebaseConfig()) return null;
+
+  try {
+    return getApps()[0] ?? initializeApp(firebaseConfig);
+  } catch {
+    return null;
+  }
+}
+
+export const firebaseApp: FirebaseApp | null = createFirebaseApp();
 
 export const db: Firestore | null = firebaseApp ? getFirestore(firebaseApp) : null;
-

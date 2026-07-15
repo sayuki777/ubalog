@@ -13,8 +13,11 @@ import {
 import { type RocketNowScanResult } from "@/lib/rocketNowScan";
 import { addBreakingRealtimeNews } from "@/lib/news";
 import {
+  canPostRealtimeOfferNow,
+  createRealtimeOfferId,
   deleteSharedRealtimeOffer,
   fetchSharedRealtimeOffers,
+  markRealtimeOfferPosted,
   mergeRealtimeOffers,
   upsertSharedRealtimeOffer,
 } from "@/lib/realtime";
@@ -553,6 +556,10 @@ export default function RealtimeBoard() {
 
   const handleSubmit = async () => {
     if (!canSync) return;
+    if (!canPostRealtimeOfferNow()) {
+      showMessage("少し待ってから投稿してください");
+      return;
+    }
     if (positionMode === "map" && !pickedLocation) {
       showMessage("地図をタップして共有位置を指定してください");
       return;
@@ -570,7 +577,7 @@ export default function RealtimeBoard() {
     const shouldSaveRocketNowFeedback =
       isRocketNowScan && rocketNowScanResult && rocketNowFinalValues;
     const newOffer: RealtimeOffer = {
-      id: `${Date.now()}-${Math.random().toString(36).slice(2)}`,
+      id: createRealtimeOfferId(),
       createdAt: now,
       name: displayNameFromProfile(loadProfile()),
       area: area.trim(),
@@ -596,6 +603,7 @@ export default function RealtimeBoard() {
       a.createdAt < b.createdAt ? 1 : -1
     );
     saveOffers(next);
+    markRealtimeOfferPosted();
     void upsertSharedRealtimeOffer(newOffer);
     addBreakingRealtimeNews({
       name: newOffer.name,
@@ -644,11 +652,11 @@ export default function RealtimeBoard() {
   };
 
   return (
-    <main className="mx-auto h-[100dvh] w-full max-w-[430px] overflow-x-hidden bg-gray-50">
+    <main className="relative mx-auto h-[100dvh] w-full max-w-[430px] overflow-hidden bg-gray-50">
       <AppHeader title="リアルタイム共有" />
       <Toast message={toastMessage} show={showToast} />
 
-      <section className="relative h-[calc(100dvh-12rem-env(safe-area-inset-bottom))] min-h-[360px] w-full max-w-full overflow-hidden bg-green-50">
+      <section className="relative h-[calc(100dvh-12.5rem-env(safe-area-inset-bottom))] min-h-[300px] w-full max-w-full overflow-hidden bg-green-50">
         <RealtimeMap
           center={mapCenter}
           offers={locatedOffers}
@@ -703,7 +711,7 @@ export default function RealtimeBoard() {
         </div>
 
         {!(positionMode === "map" && shareInputOpen && !shareOpen) && (
-        <div className="absolute bottom-24 right-4 z-[560] flex flex-col items-center gap-3">
+        <div className="absolute bottom-28 right-4 z-[560] flex flex-col items-center gap-3">
           <button
             type="button"
             onClick={openShareSheet}
@@ -715,7 +723,7 @@ export default function RealtimeBoard() {
         )}
 
         {!(positionMode === "map" && shareInputOpen && !shareOpen) && (
-          <div className="absolute bottom-4 left-3 right-3 z-[540] max-w-[calc(100%-1.5rem)] rounded-2xl bg-white/95 p-2 shadow-lg">
+          <div className="absolute bottom-5 left-3 right-3 z-[540] max-w-[calc(100%-1.5rem)] rounded-2xl bg-white/95 p-2 shadow-lg">
             <div className="grid grid-cols-5 gap-1">
               <button
                 type="button"
@@ -754,7 +762,7 @@ export default function RealtimeBoard() {
         )}
 
         {positionMode === "map" && shareInputOpen && !shareOpen && (
-          <div className="absolute bottom-24 left-3 right-3 z-[560] max-w-[406px]">
+          <div className="absolute bottom-28 left-3 right-3 z-[560] max-w-[406px]">
             <ShareSyncFooter
               amountNumber={amountNumber}
               distanceNumber={distanceNumber}
@@ -1157,8 +1165,8 @@ function BottomSheet({
   onClose: () => void;
 }) {
   return (
-    <div className="fixed inset-0 z-[700] flex items-end justify-center bg-black/30">
-      <div className="w-full max-w-[430px] rounded-t-3xl bg-white p-3 shadow-2xl">
+    <div className="fixed inset-y-0 left-1/2 z-[700] flex w-full max-w-[430px] -translate-x-1/2 items-end justify-center overflow-x-hidden bg-black/30">
+      <div className="w-full max-w-[430px] overflow-hidden rounded-t-3xl bg-white p-3 shadow-2xl">
         <div className="mb-3 flex items-center justify-between">
           <div className="text-lg font-bold text-gray-900">{title}</div>
           <button
@@ -1169,7 +1177,7 @@ function BottomSheet({
             閉じる
           </button>
         </div>
-        <div className="max-h-[88dvh] overflow-y-auto pb-4">{children}</div>
+        <div className="max-h-[calc(88dvh-env(safe-area-inset-bottom))] overflow-x-hidden overflow-y-auto pb-4">{children}</div>
       </div>
     </div>
   );
