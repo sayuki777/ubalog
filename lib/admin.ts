@@ -8,16 +8,16 @@ function adminKey() {
   return process.env.NEXT_PUBLIC_UBALOG_ADMIN_KEY?.trim() ?? "";
 }
 
-export function isAdminEnabled() {
+export function isAdminMode() {
   if (typeof window === "undefined") return false;
   return localStorage.getItem(ADMIN_STORAGE_KEY) === "true";
 }
 
-export function enableAdminModeFromQuery() {
+export function enableAdminFromQuery() {
   if (typeof window === "undefined") return false;
 
   const key = adminKey();
-  if (!key) return isAdminEnabled();
+  if (!key) return isAdminMode();
 
   try {
     const value = new URLSearchParams(window.location.search).get("admin");
@@ -26,13 +26,21 @@ export function enableAdminModeFromQuery() {
       return true;
     }
   } catch {
-    return isAdminEnabled();
+    return isAdminMode();
   }
 
-  return isAdminEnabled();
+  return isAdminMode();
+}
+
+export function clearAdminMode() {
+  if (typeof window === "undefined") return;
+  localStorage.removeItem(ADMIN_STORAGE_KEY);
 }
 
 export function useAdminMode() {
-  const [enabled] = useState(() => enableAdminModeFromQuery());
+  const [enabled] = useState(() => enableAdminFromQuery());
   return enabled;
 }
+
+export const isAdminEnabled = isAdminMode;
+export const enableAdminModeFromQuery = enableAdminFromQuery;

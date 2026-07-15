@@ -149,7 +149,7 @@ export async function upsertSharedRealtimeOffer(offer: SharedRealtimeOffer) {
   }
 }
 
-export async function hideSharedRealtimeOffer(id: string, reason = "admin-hide") {
+export async function hideSharedRealtimeOffer(id: string, reason = "admin_hidden") {
   if (!db) return;
 
   try {

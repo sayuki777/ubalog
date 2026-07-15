@@ -163,7 +163,7 @@ export async function fetchSharedRecords() {
   }
 }
 
-export async function hideSharedRecord(record: SharedRecord, reason = "admin-hide") {
+export async function hideSharedRecord(record: SharedRecord, reason = "admin_hidden") {
   if (!db) return;
   const sanitized = sanitizeSharedRecord({
     ...record,

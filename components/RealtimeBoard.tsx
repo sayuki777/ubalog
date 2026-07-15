@@ -724,7 +724,7 @@ export default function RealtimeBoard() {
     const nextLocal = hasLocalOffer
       ? localOffers.map((offer) =>
           offer.id === id
-            ? { ...offer, hidden: true, hiddenAt, hiddenReason: "admin-hide" }
+            ? { ...offer, hidden: true, hiddenAt, hiddenReason: "admin_hidden" }
             : offer
         )
       : [
@@ -741,7 +741,7 @@ export default function RealtimeBoard() {
             comment: "",
             hidden: true,
             hiddenAt,
-            hiddenReason: "admin-hide",
+            hiddenReason: "admin_hidden",
           },
         ];
     saveOffers(nextLocal);
@@ -1463,7 +1463,7 @@ function OfferCard({
         </div>
       )}
 
-      {confirmingDelete ? (
+      {isAdmin && confirmingDelete ? (
         <div className="mt-3 rounded-xl border border-red-100 bg-red-50 px-3 py-3">
           <div className="text-sm font-bold text-red-700">この共有を削除しますか？</div>
           <div className="mt-3 flex gap-2">
@@ -1483,7 +1483,7 @@ function OfferCard({
             </button>
           </div>
         </div>
-      ) : confirmingHide ? (
+      ) : isAdmin && confirmingHide ? (
         <div className="mt-3 rounded-xl border border-red-100 bg-red-50 px-3 py-3">
           <div className="text-sm font-bold text-red-700">この共有を非表示にしますか？</div>
           <div className="mt-3 flex gap-2">
@@ -1503,17 +1503,15 @@ function OfferCard({
             </button>
           </div>
         </div>
-      ) : (
+      ) : isAdmin ? (
         <div className="mt-3 flex justify-end gap-2">
-          {isAdmin && (
-            <button
-              type="button"
-              onClick={() => setConfirmingHide(true)}
-              className="rounded-full bg-red-50 px-3 py-1.5 text-xs font-bold text-red-600 ring-1 ring-red-100 active:bg-red-100"
-            >
-              非表示
-            </button>
-          )}
+          <button
+            type="button"
+            onClick={() => setConfirmingHide(true)}
+            className="rounded-full bg-red-50 px-3 py-1.5 text-xs font-bold text-red-600 ring-1 ring-red-100 active:bg-red-100"
+          >
+            非表示
+          </button>
           <button
             type="button"
             onClick={() => setConfirmingDelete(true)}
@@ -1522,7 +1520,7 @@ function OfferCard({
             削除
           </button>
         </div>
-      )}
+      ) : null}
     </article>
   );
 }

@@ -8,6 +8,7 @@ import BottomMenu from "@/components/BottomMenu";
 import DataBackupPanel from "@/components/DataBackupPanel";
 import FooterLinks from "@/components/FooterLinks";
 import Toast from "@/components/Toast";
+import { clearAdminMode, enableAdminFromQuery } from "@/lib/admin";
 import { getRegionByPrefecture, PREFECTURES } from "@/lib/areas";
 import { PROFILE_GUIDE_DISMISSED_KEY, writeStorageBoolean } from "@/lib/onboarding";
 import { createUserFromInput, setActiveUser } from "@/lib/users";
@@ -98,11 +99,13 @@ export default function ProfilePage() {
   const [recordCount, setRecordCount] = useState(0);
   const [feedbackCopyMessage, setFeedbackCopyMessage] = useState("");
   const [feedbackFallbackText, setFeedbackFallbackText] = useState("");
+  const [adminEnabled, setAdminEnabled] = useState(false);
 
   useEffect(() => {
     const timer = window.setTimeout(() => {
       setProfile(loadProfile());
       setRecordCount(loadRecordCount());
+      setAdminEnabled(enableAdminFromQuery());
       setLoaded(true);
     }, 0);
 
@@ -177,12 +180,17 @@ export default function ProfilePage() {
     window.location.href = "/";
   };
 
+  const disableAdminMode = () => {
+    clearAdminMode();
+    setAdminEnabled(false);
+  };
+
   if (!loaded) return null;
 
   const showRecruitLink = recordCount === 0 || !profile.mainService.trim();
 
   return (
-    <main className="mx-auto min-h-screen w-full max-w-[430px] bg-gray-50 pb-24">
+    <main className="mx-auto min-h-screen w-full max-w-[430px] overflow-x-hidden bg-gray-50 pb-24">
       <AppHeader title="プロフィール" />
       <Toast message="保存しました" show={showToast} />
 
@@ -362,6 +370,28 @@ export default function ProfilePage() {
             </button>
           </div>
         </section>
+
+        {adminEnabled && (
+          <section className="mt-4 rounded-2xl border border-gray-100 bg-white p-4 shadow-sm">
+            <div className="flex min-w-0 items-center justify-between gap-3">
+              <div className="min-w-0">
+                <div className="text-sm font-black text-gray-900">
+                  管理モード中
+                </div>
+                <div className="mt-1 text-xs font-bold leading-5 text-gray-500">
+                  ランキングや共有の整理ボタンが表示されています。
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={disableAdminMode}
+                className="shrink-0 rounded-full border border-gray-200 bg-gray-50 px-3 py-2 text-xs font-black text-gray-600 active:bg-gray-100"
+              >
+                解除
+              </button>
+            </div>
+          </section>
+        )}
 
         <FooterLinks />
       </div>

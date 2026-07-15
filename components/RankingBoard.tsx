@@ -785,7 +785,7 @@ export default function RankingBoard() {
       ...record,
       hidden: true,
       hiddenAt,
-      hiddenReason: "admin-hide",
+      hiddenReason: "admin_hidden",
     }));
     const localRecords = loadAllRecords();
     const nextLocal = localRecords.map((record) =>
@@ -794,7 +794,7 @@ export default function RankingBoard() {
             ...record,
             hidden: true,
             hiddenAt,
-            hiddenReason: "admin-hide",
+            hiddenReason: "admin_hidden",
           }
         : record
     );
