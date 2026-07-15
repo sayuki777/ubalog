@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
-import { readUbalogRecords } from "@/lib/records";
+import { readUbalogRecords, type UbalogStoredRecord } from "@/lib/records";
 import {
   getRocketNowStats,
   type RocketNowStats,
@@ -35,12 +35,16 @@ function StatPill({
   );
 }
 
-export default function RocketNowStatsCard() {
+export default function RocketNowStatsCard({
+  records,
+}: {
+  records?: UbalogStoredRecord[];
+}) {
   const [stats, setStats] = useState<RocketNowStats | null>(null);
 
   useEffect(() => {
     const load = () => {
-      setStats(getRocketNowStats(readUbalogRecords()));
+      setStats(getRocketNowStats(records ?? readUbalogRecords()));
     };
 
     const timer = window.setTimeout(load, 0);
@@ -59,7 +63,7 @@ export default function RocketNowStatsCard() {
         load
       );
     };
-  }, []);
+  }, [records]);
 
   if (!stats?.hasRocketRecords) return null;
 

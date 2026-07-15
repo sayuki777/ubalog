@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import GoalDashboard from "@/components/GoalDashboard";
 import PerformanceComparePanel from "@/components/PerformanceComparePanel";
+import RocketNowStatsCard from "@/components/RocketNowStatsCard";
 import {
   getHighlightUpdate,
   hasHighlight,
@@ -14,12 +15,14 @@ import {
   formatPerformanceValue,
   getFixedPerformanceStats,
 } from "@/lib/performance";
+import type { UbalogStoredRecord } from "@/lib/records";
 import {
   ensureActiveUserFromProfile,
   getActiveUser,
   getDisplayNameFromProfileOrUser,
   type UbalogUser,
 } from "@/lib/users";
+import { fetchSharedRecords, mergeRecords } from "@/lib/sharedRecords";
 
 const RECORDS_STORAGE_KEY = "ubalog-records";
 const PROFILE_STORAGE_KEY = "ubalog-profile";
@@ -151,6 +154,22 @@ function nextMonthDate(base: Date, diff: number) {
   return new Date(base.getFullYear(), base.getMonth() + diff, 1);
 }
 
+function monthRange(base: Date, diffMonths: number) {
+  const target = new Date(base.getFullYear(), base.getMonth() + diffMonths, 1);
+  const key = monthKey(target);
+  return {
+    key,
+    label:
+      diffMonths === 0 ? "今月" : diffMonths === -1 ? "前月" : "前々月",
+  };
+}
+
+function monthSales(records: StoredRecord[], key: string) {
+  return records
+    .filter((record) => record.date.startsWith(key))
+    .reduce((sum, record) => sum + (record.total || 0), 0);
+}
+
 export default function PersonalDashboard() {
   const [records, setRecords] = useState<StoredRecord[]>([]);
   const [activeUser, setActiveUser] = useState<UbalogUser | null>(null);
@@ -167,7 +186,12 @@ export default function PersonalDashboard() {
       const user = getActiveUser();
       setActiveUser(user);
       setDisplayName(getDisplayNameFromProfileOrUser(profile, user));
-      setRecords(loadRecords());
+      const localRecords = loadRecords();
+      setRecords(localRecords);
+      void fetchSharedRecords().then((remoteRecords) => {
+        if (remoteRecords.length === 0) return;
+        setRecords(mergeRecords(localRecords, remoteRecords) as StoredRecord[]);
+      });
       setHighlight(getHighlightUpdate());
     };
 
@@ -212,6 +236,17 @@ export default function PersonalDashboard() {
   );
   const bestRecord = [...monthRecords].sort((a, b) => b.total - a.total)[0] ?? null;
   const best3 = [...monthRecords].sort((a, b) => b.total - a.total).slice(0, 3);
+  const monthlySales = useMemo(
+    () =>
+      [0, -1, -2].map((diff) => {
+        const range = monthRange(new Date(), diff);
+        return {
+          label: range.label,
+          amount: monthSales(personalRecords, range.key),
+        };
+      }),
+    [personalRecords]
+  );
 
   const changeMonth = (diff: number) => {
     const next = nextMonthDate(currentMonth, diff);
@@ -387,6 +422,8 @@ export default function PersonalDashboard() {
           </section>
 
           <MonthlyTable records={monthRecords} onSelectDate={setSelectedDate} />
+          <MonthlySalesSummary items={monthlySales} />
+          <RocketNowStatsCard records={personalRecords as UbalogStoredRecord[]} />
         </>
       ) : (
         <GoalDashboard
@@ -580,6 +617,28 @@ function MonthlyTable({
           </table>
         </div>
       )}
+    </section>
+  );
+}
+
+function MonthlySalesSummary({
+  items,
+}: {
+  items: { label: string; amount: number }[];
+}) {
+  return (
+    <section className="rounded-2xl bg-white p-4 shadow-sm">
+      <div className="text-lg font-bold text-gray-900">月間売上</div>
+      <div className="mt-3 grid grid-cols-3 gap-2">
+        {items.map((item) => (
+          <div key={item.label} className="min-w-0 rounded-2xl bg-gray-50 px-2 py-3 text-center">
+            <div className="text-xs font-bold text-gray-500">{item.label}</div>
+            <div className="mt-1 truncate text-sm font-black text-gray-900">
+              {formatCurrency(item.amount)}
+            </div>
+          </div>
+        ))}
+      </div>
     </section>
   );
 }

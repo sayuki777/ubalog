@@ -7,7 +7,6 @@ import BottomMenu from "@/components/BottomMenu";
 import FirstStepGuide from "@/components/FirstStepGuide";
 import PersonalDashboard from "@/components/PersonalDashboard";
 import PersonalNewsCard from "@/components/PersonalNewsCard";
-import RocketNowStatsCard from "@/components/RocketNowStatsCard";
 import {
   getHighlightUpdate,
   hasHighlight,
@@ -25,6 +24,11 @@ import {
   getDisplayNameFromProfileOrUser,
 } from "@/lib/users";
 import { buildUbalogShareText, openXShare } from "@/lib/share";
+import {
+  fetchSharedRecords,
+  mergeRecords,
+  type SharedRecord,
+} from "@/lib/sharedRecords";
 
 type Profile = {
   displayName?: string;
@@ -213,10 +217,20 @@ export default function HomeDashboard() {
       const raw = localStorage.getItem(RECORDS_STORAGE_KEY);
       if (!raw) {
         setRecords([]);
+        void fetchSharedRecords().then((remoteRecords) => {
+          if (remoteRecords.length > 0) setRecords(remoteRecords as StoredRecord[]);
+        });
         return;
       }
       try {
-        setRecords(JSON.parse(raw));
+        const localRecords = JSON.parse(raw) as StoredRecord[];
+        setRecords(localRecords);
+        void fetchSharedRecords().then((remoteRecords) => {
+          if (remoteRecords.length === 0) return;
+          setRecords(
+            mergeRecords(localRecords as SharedRecord[], remoteRecords) as StoredRecord[]
+          );
+        });
       } catch {
         setRecords([]);
       }
@@ -337,8 +351,6 @@ export default function HomeDashboard() {
           onboardingDismissed={onboardingDismissed}
           onDismissOnboarding={dismissOnboarding}
         />
-
-        <RocketNowStatsCard />
 
         <section className="mt-4 rounded-2xl bg-white p-4 shadow-sm">
           <div className="text-base font-bold text-gray-900">前日のランキング TOP3</div>

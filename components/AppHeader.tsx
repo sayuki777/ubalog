@@ -20,7 +20,7 @@ export default function AppHeader({ title, leftAction }: AppHeaderProps) {
           ) : (
             <>
               <span className="block text-[10px] font-bold leading-4 text-white/85">
-                自由にデリ　自由にログする
+                自由にフーデリ　自由にログ
               </span>
               <span className="block text-2xl font-black leading-7">ウバログ</span>
             </>

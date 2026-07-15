@@ -763,7 +763,7 @@ export default function RealtimeBoard() {
         )}
 
         {positionMode === "map" && !shareOpen && (
-          <div className="absolute left-4 right-20 top-24 z-[520] rounded-2xl bg-white/95 px-4 py-3 text-sm font-bold text-gray-800 shadow-lg">
+          <div className="absolute left-4 right-20 top-36 z-[520] rounded-2xl bg-white/95 px-4 py-3 text-sm font-bold text-gray-800 shadow-lg">
             {pickedLocation
               ? "地図上で位置指定済み"
               : "地図をタップして共有位置を指定してください"}
@@ -771,7 +771,7 @@ export default function RealtimeBoard() {
         )}
 
         {positionMode === "map" && shareInputOpen && !shareOpen && (
-          <div className="absolute bottom-28 left-3 right-3 z-[560] max-w-[406px]">
+          <div className="absolute bottom-24 left-3 right-3 z-[560] max-w-[406px]">
             <ShareSyncFooter
               amountNumber={amountNumber}
               distanceNumber={distanceNumber}
