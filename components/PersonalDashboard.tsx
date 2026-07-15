@@ -219,9 +219,9 @@ export default function PersonalDashboard() {
   };
 
   return (
-    <div className="mt-4 space-y-4">
-      <section className="rounded-2xl bg-white p-4 shadow-sm">
-        <div className="flex items-center justify-between">
+    <div className="mt-4 space-y-3">
+      <section className="rounded-2xl bg-white p-3 shadow-sm">
+        <div className="hidden">
           <div>
             {displayName !== "匿名配達員" && (
               <p className="mt-1 font-bold text-green-700">
@@ -236,11 +236,11 @@ export default function PersonalDashboard() {
           </div>
         </div>
 
-        <div className="mt-4 grid grid-cols-2 gap-2 rounded-2xl bg-gray-100 p-1">
+        <div className="grid grid-cols-2 gap-2 rounded-2xl bg-gray-100 p-1">
           <button
             type="button"
             onClick={() => setActiveTab("score")}
-            className={`h-11 rounded-xl text-sm font-bold ${
+            className={`h-9 rounded-xl text-sm font-bold ${
               activeTab === "score"
                 ? "bg-green-600 text-white shadow-sm"
                 : "text-gray-600"
@@ -251,7 +251,7 @@ export default function PersonalDashboard() {
           <button
             type="button"
             onClick={() => setActiveTab("goal")}
-            className={`h-11 rounded-xl text-sm font-bold ${
+            className={`h-9 rounded-xl text-sm font-bold ${
               activeTab === "goal"
                 ? "bg-green-600 text-white shadow-sm"
                 : "text-gray-600"

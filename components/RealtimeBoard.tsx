@@ -323,6 +323,7 @@ export default function RealtimeBoard() {
   const [scanErrorMessage, setScanErrorMessage] = useState("");
   const [toastMessage, setToastMessage] = useState("共有しました");
   const [showToast, setShowToast] = useState(false);
+  const [helpOpen, setHelpOpen] = useState(false);
 
   const readCurrentLocation = useCallback(() => {
     return new Promise<CurrentLocation | null>((resolve) => {
@@ -656,7 +657,14 @@ export default function RealtimeBoard() {
       <AppHeader title="リアルタイム共有" />
       <Toast message={toastMessage} show={showToast} />
 
-      <section className="relative h-[calc(100dvh-12.5rem-env(safe-area-inset-bottom))] min-h-[300px] w-full max-w-full overflow-hidden bg-green-50">
+      <section className="relative h-[calc(100dvh-14rem-env(safe-area-inset-bottom))] min-h-[300px] w-full max-w-full overflow-hidden bg-green-50">
+        <button
+          type="button"
+          onClick={() => setHelpOpen(true)}
+          className="absolute left-3 top-3 z-[570] rounded-full bg-white/95 px-3 py-1.5 text-xs font-black text-green-700 shadow-sm ring-1 ring-green-100"
+        >
+          使い方
+        </button>
         <RealtimeMap
           center={mapCenter}
           offers={locatedOffers}
@@ -676,42 +684,15 @@ export default function RealtimeBoard() {
           }}
         />
 
-        <div className="pointer-events-none absolute left-3 top-3 max-w-[calc(100%-1.5rem)] rounded-2xl bg-white/95 px-3 py-2 shadow-sm">
+        <div className="pointer-events-none absolute right-3 top-3 max-w-[calc(100%-6rem)] rounded-2xl bg-white/95 px-3 py-2 shadow-sm">
           <div className="text-xs font-bold text-gray-500">表示中</div>
           <div className="text-sm font-bold text-gray-900">
             {filteredOffers.length}件・地図 {locatedOffers.length}件
           </div>
         </div>
 
-        <div className="absolute left-3 right-3 top-20 z-[530] max-w-[calc(100%-1.5rem)] rounded-2xl bg-white/95 p-2 shadow-lg">
-          <div className="grid grid-cols-3 gap-1.5">
-            {timeFilters.map((item) => {
-              const active = selectedHours === item.hours;
-              return (
-                <button
-                  key={item.label}
-                  type="button"
-                  onClick={() => setSelectedHours(item.hours)}
-                  className={`h-8 min-w-0 rounded-full px-2 text-xs font-bold ${
-                    active ? "bg-green-600 text-white" : "bg-gray-100 text-gray-600"
-                  }`}
-                >
-                  {item.label}
-                </button>
-              );
-            })}
-            <button
-              type="button"
-              onClick={() => setListOpen(true)}
-              className="h-8 min-w-0 rounded-full bg-white px-2 text-xs font-bold text-green-700 ring-1 ring-green-200"
-            >
-              最近の共有
-            </button>
-          </div>
-        </div>
-
         {!(positionMode === "map" && shareInputOpen && !shareOpen) && (
-        <div className="absolute bottom-28 right-4 z-[560] flex flex-col items-center gap-3">
+        <div className="absolute bottom-40 right-4 z-[560] flex flex-col items-center gap-3">
           <button
             type="button"
             onClick={openShareSheet}
@@ -750,6 +731,30 @@ export default function RealtimeBoard() {
                 );
               })}
             </div>
+            <div className="mt-1.5 grid grid-cols-6 gap-1">
+              {timeFilters.map((item) => {
+                const active = selectedHours === item.hours;
+                return (
+                  <button
+                    key={item.label}
+                    type="button"
+                    onClick={() => setSelectedHours(item.hours)}
+                    className={`h-8 min-w-0 rounded-xl px-1 text-[10px] font-bold ${
+                      active ? "bg-green-600 text-white" : "bg-gray-100 text-gray-600"
+                    }`}
+                  >
+                    {item.label}
+                  </button>
+                );
+              })}
+              <button
+                type="button"
+                onClick={() => setListOpen(true)}
+                className="h-8 min-w-0 truncate rounded-xl bg-white px-1 text-[10px] font-bold text-green-700 ring-1 ring-green-200"
+              >
+                最近
+              </button>
+            </div>
           </div>
         )}
 
@@ -762,7 +767,7 @@ export default function RealtimeBoard() {
         )}
 
         {positionMode === "map" && shareInputOpen && !shareOpen && (
-          <div className="absolute bottom-28 left-3 right-3 z-[560] max-w-[406px]">
+          <div className="absolute bottom-40 left-3 right-3 z-[560] max-w-[406px]">
             <ShareSyncFooter
               amountNumber={amountNumber}
               distanceNumber={distanceNumber}
@@ -781,6 +786,28 @@ export default function RealtimeBoard() {
         )}
 
       </section>
+
+      {helpOpen && (
+        <BottomSheet title="リアルタイム共有とは？" onClose={() => setHelpOpen(false)}>
+          <div className="space-y-3 text-sm font-bold leading-6 text-gray-700">
+            <p>
+              今見つけた案件を、みんなで共有できる場所です。
+            </p>
+            <div className="rounded-2xl bg-green-50 px-3 py-3 text-green-800">
+              報酬・距離・サービスを入れると、地図に案件が表示されます。
+            </div>
+            <div className="space-y-1 text-xs leading-5 text-gray-600">
+              <div>1. ＋共有を押す</div>
+              <div>2. 報酬と距離を入力</div>
+              <div>3. 地図に同期</div>
+              <div>4. 位置を選んで共有</div>
+            </div>
+            <p className="text-xs text-gray-500">
+              詳しすぎる場所は入れず、目安として使ってください。
+            </p>
+          </div>
+        </BottomSheet>
+      )}
 
       {listOpen && (
         <BottomSheet title="最近の共有" onClose={() => setListOpen(false)}>

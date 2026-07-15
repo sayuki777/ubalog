@@ -262,6 +262,8 @@ export default function HomeDashboard() {
       <AppHeader />
 
       <div className="px-4 pb-[calc(8rem+env(safe-area-inset-bottom))] pt-4">
+        <PersonalNewsCard />
+
         <section className="rounded-2xl bg-white p-4 shadow-sm">
           <div className="grid grid-cols-2 gap-3">
             <SummaryCard
@@ -291,10 +293,6 @@ export default function HomeDashboard() {
           onboardingDismissed={onboardingDismissed}
           onDismissOnboarding={dismissOnboarding}
         />
-
-        <PersonalNewsCard />
-
-        <PersonalDashboard />
 
         <RocketNowStatsCard />
 
@@ -342,6 +340,8 @@ export default function HomeDashboard() {
             ランキングを見る
           </Link>
         </section>
+
+        <PersonalDashboard />
 
         <section className="mt-4 space-y-3">
           {menuCards.map((card) => (

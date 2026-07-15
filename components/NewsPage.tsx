@@ -211,7 +211,7 @@ export default function NewsPage() {
     <main className="mx-auto min-h-screen w-full max-w-[430px] bg-gray-50 pb-24">
       <AppHeader title="ニュース" />
 
-      <div className="px-4 pt-2">
+      <div className="px-4 pt-1">
         <section className="hidden">
           <h1 className="text-xl font-bold text-gray-900">ニュース</h1>
           <div className="mt-3 rounded-2xl bg-gray-50 px-3 py-3 text-sm font-bold text-gray-500">
@@ -219,13 +219,13 @@ export default function NewsPage() {
           </div>
         </section>
 
-        <div className="sticky top-16 z-20 -mx-4 bg-gray-50 px-4 py-2">
-          <div className="mb-2 min-h-4">
+        <div className="sticky top-16 z-20 -mx-4 bg-gray-50 px-4 py-1.5">
+          <div className="mb-1 min-h-4">
             <div className="text-xs font-bold text-gray-500">
               {isRefreshing ? "更新中..." : message}
             </div>
           </div>
-          <div className="mb-2 flex min-w-0 items-center gap-2">
+          <div className="mb-1.5 flex min-w-0 items-center gap-2">
             <button
               type="button"
               onClick={handleWeeklySummary}

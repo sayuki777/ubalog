@@ -50,6 +50,16 @@ function isNew(item: UbalogNewsItem) {
   return Number.isFinite(time) && Date.now() - time < 1000 * 60 * 60 * 24;
 }
 
+function shortRankingTitle(item: UbalogNewsItem) {
+  if (item.source === "external") return item.message || item.title;
+  if (item.type === "ranking_top_update") return "トップ更新！次は君";
+  if (item.type === "area_top_update") return "エリア王更新！";
+  if (item.type === "breaking_record" && item.category === "breaking") {
+    return "売上記録きた！";
+  }
+  return item.message || item.title;
+}
+
 function Thumb({ item }: { item: UbalogNewsItem }) {
   if (item.imageUrl) {
     return (
@@ -72,12 +82,13 @@ function Thumb({ item }: { item: UbalogNewsItem }) {
 
 function Body({ item }: { item: UbalogNewsItem }) {
   const isBreaking = item.category === "breaking";
+  const title = shortRankingTitle(item);
   return (
     <div className={`flex min-w-0 gap-3 border-b border-gray-100 ${isBreaking ? "py-2" : "py-3"}`}>
       <Thumb item={item} />
       <div className="min-w-0 flex-1">
         <div className={`line-clamp-2 font-bold leading-5 text-gray-900 ${isBreaking ? "text-[13px]" : "text-sm"}`}>
-          {item.message || item.title}
+          {title}
         </div>
         {item.type === "weekly_summary" && item.summary && (
           <div className="mt-2 grid grid-cols-3 gap-1 text-[11px] font-bold text-gray-600">
