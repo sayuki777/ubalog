@@ -500,12 +500,6 @@ export default function RecordForm() {
 
   const openRocketBulkImport = () => {
     setRocketBulkLaunchToken(Date.now());
-    window.setTimeout(() => {
-      rocketBulkPanelRef.current?.scrollIntoView({
-        behavior: "smooth",
-        block: "center",
-      });
-    }, 50);
   };
 
   const handleSave = () => {

@@ -200,14 +200,28 @@ export async function upsertSharedRecord(record: SharedRecord) {
   }
 }
 
-function mergeKey(record: SharedRecord) {
-  const nameKey =
-    record.deviceId ||
-    record.userId ||
-    record.displayName ||
-    record.name ||
-    "anonymous";
-  return `${nameKey}_${record.date}`;
+function normalizeMergeText(value?: string) {
+  return value?.replace(/[\r\n\t]+/g, " ").trim() || "";
+}
+
+function mergeKeys(record: SharedRecord) {
+  const date = record.date;
+  const total = String(record.total ?? 0);
+  const keys = [
+    record.deviceId ? `device:${record.deviceId}:${date}` : "",
+    record.userId ? `user:${record.userId}:${date}` : "",
+    normalizeMergeText(record.displayName)
+      ? `display:${normalizeMergeText(record.displayName)}:${date}:${total}`
+      : "",
+    normalizeMergeText(record.name)
+      ? `name:${normalizeMergeText(record.name)}:${date}:${total}`
+      : "",
+    normalizeMergeText(record.rankingName)
+      ? `ranking:${normalizeMergeText(record.rankingName)}:${date}:${total}`
+      : "",
+  ].filter(Boolean);
+
+  return keys.length > 0 ? keys : [`anonymous:${date}:${total}`];
 }
 
 function recordTime(record: SharedRecord) {
@@ -224,20 +238,25 @@ export function mergeRecords(
   remoteRecords: SharedRecord[]
 ) {
   const merged = new Map<string, SharedRecord>();
+  const aliases = new Map<string, string>();
+
+  const addRecord = (record: SharedRecord) => {
+    const sanitized = sanitizeSharedRecord(record);
+    if (!sanitized || sanitized.hidden === true) return;
+
+    const keys = mergeKeys(sanitized);
+    const primaryKey =
+      keys.map((key) => aliases.get(key)).find(Boolean) ?? keys[0];
+    const next = chooseNewerRecord(merged.get(primaryKey), sanitized);
+    merged.set(primaryKey, next);
+    keys.forEach((key) => aliases.set(key, primaryKey));
+  };
 
   for (const record of remoteRecords) {
-    const sanitized = sanitizeSharedRecord(record);
-    if (!sanitized) continue;
-    if (sanitized.hidden === true) continue;
-    const key = mergeKey(sanitized);
-    merged.set(key, chooseNewerRecord(merged.get(key), sanitized));
+    addRecord(record);
   }
   for (const record of localRecords) {
-    const sanitized = sanitizeSharedRecord(record);
-    if (!sanitized) continue;
-    if (sanitized.hidden === true) continue;
-    const key = mergeKey(sanitized);
-    merged.set(key, chooseNewerRecord(merged.get(key), sanitized));
+    addRecord(record);
   }
 
   return [...merged.values()].sort((a, b) => (a.date < b.date ? 1 : -1));

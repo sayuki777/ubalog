@@ -440,6 +440,12 @@ export default function RealtimeBoard() {
     return () => window.clearTimeout(timer);
   }, [focusRequestedOffer, requestLocation]);
 
+  useEffect(() => {
+    if (!lastSharedOffer) return;
+    const timer = window.setTimeout(() => setLastSharedOffer(null), 7000);
+    return () => window.clearTimeout(timer);
+  }, [lastSharedOffer]);
+
   const amountNumber = parseInt(amount || "0", 10) || 0;
   const distanceNumber = parseFloat(distanceKm || "0") || 0;
   const unitPrice = useMemo(
@@ -776,6 +782,7 @@ export default function RealtimeBoard() {
               lng: roundCoordinate(point.lng),
             };
             setPickedLocation(nextLocation);
+            setLastSharedOffer(null);
             setPositionMode("map");
             setMapCenter([nextLocation.lat, nextLocation.lng]);
             showMessage("共有位置を指定しました");
@@ -807,7 +814,16 @@ export default function RealtimeBoard() {
 
         {lastSharedOffer && !shareOpen && !shareInputOpen && (
           <div className="absolute bottom-28 left-3 z-[560] w-[calc(100%-7rem)] max-w-[300px] rounded-3xl border border-green-100 bg-white/95 p-3 shadow-2xl">
-            <div className="text-sm font-black text-gray-900">共有しました！</div>
+            <div className="flex items-center justify-between gap-2">
+              <div className="text-sm font-black text-gray-900">共有しました！</div>
+              <button
+                type="button"
+                onClick={() => setLastSharedOffer(null)}
+                className="shrink-0 rounded-full bg-gray-100 px-2 py-1 text-[10px] font-bold text-gray-600"
+              >
+                閉じる
+              </button>
+            </div>
             <div className="mt-1 truncate text-xs font-bold text-green-700">
               {lastSharedOffer.service} ￥{lastSharedOffer.amount.toLocaleString()} / {lastSharedOffer.distanceKm.toLocaleString()}km
             </div>

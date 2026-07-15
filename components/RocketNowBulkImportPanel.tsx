@@ -120,10 +120,10 @@ export default function RocketNowBulkImportPanel({
       setMessage(
         results.length > 0
           ? `${results.length}日分を読み取りました`
-          : "読み取れる日別データが見つかりませんでした"
+          : "日別データが見つかりませんでした"
       );
     } catch {
-      setMessage("読み取れませんでした。スクショを変えて試してください");
+      setMessage("読み取れませんでした。スクショを変えてお試しください");
     } finally {
       setLoading(false);
     }
@@ -223,9 +223,9 @@ export default function RocketNowBulkImportPanel({
         className="flex w-full min-w-0 items-start justify-between gap-3 text-left"
       >
         <div className="min-w-0">
-          <h2 className="text-base font-black text-gray-900">ロケナウ一気読み 🚀</h2>
+          <h2 className="text-base font-black text-gray-900">ロケナウ一気読み 📷</h2>
           <p className="mt-1 text-xs font-bold leading-5 text-gray-600">
-            スクショをまとめて、確認してからRocket欄へ反映できます。
+            スクショをまとめて選び、確認してからRocket欄へ反映できます。
           </p>
         </div>
         <span className="shrink-0 rounded-full bg-green-50 px-2 py-1 text-xs font-black text-green-700">
@@ -273,7 +273,7 @@ export default function RocketNowBulkImportPanel({
               />
               <div className="grid grid-cols-3 gap-2">
                 <SmallActionButton
-                  label="全部ON"
+                  label="全て選択"
                   onClick={() =>
                     setRows((current) =>
                       current.map((row) => ({ ...row, selected: true }))
@@ -281,7 +281,7 @@ export default function RocketNowBulkImportPanel({
                   }
                 />
                 <SmallActionButton
-                  label="要確認OFF"
+                  label="要確認を外す"
                   onClick={() =>
                     setRows((current) =>
                       current.map((row) => ({
@@ -292,7 +292,7 @@ export default function RocketNowBulkImportPanel({
                   }
                 />
                 <SmallActionButton
-                  label="結果をクリア"
+                  label="結果クリア"
                   onClick={() => {
                     setRows([]);
                     setConfirming(false);
@@ -461,12 +461,12 @@ function BulkImportRow({
   const existingRocket = existingRecord?.services.rocket;
   const hasExistingRocket =
     Boolean(existingRocket) &&
-    (existingRocket?.amount ?? 0) > 0 || (existingRocket?.deliveries ?? 0) > 0;
+    ((existingRocket?.amount ?? 0) > 0 || (existingRocket?.deliveries ?? 0) > 0);
   const existingBadge = !existingRecord
     ? "新規追加"
     : hasExistingRocket
     ? "上書き予定"
-    : "既存記録あり";
+    : "記録あり";
   const judge = judgeRow(row);
 
   return (
@@ -486,10 +486,10 @@ function BulkImportRow({
       {hasExistingRocket && existingRocket && (
         <div className="mt-2 rounded-lg bg-white px-2 py-1.5 text-[11px] font-bold leading-5 text-gray-600">
           <div>
-            既存: {formatCurrency(existingRocket.amount)} / {existingRocket.deliveries}件
+            既存 {formatCurrency(existingRocket.amount)} / {existingRocket.deliveries}件
           </div>
           <div>
-            読取: {formatCurrency(Number(row.amountInput) || 0)} /{" "}
+            読取 {formatCurrency(Number(row.amountInput) || 0)} /{" "}
             {Number(row.deliveriesInput) || 0}件
           </div>
         </div>
@@ -589,7 +589,7 @@ function ConfirmImportCard({
         <div>配達 {totalDeliveries}件</div>
       </div>
       <div className="mt-2 space-y-1 text-[11px] font-bold text-green-800">
-        <div>上書き予定:</div>
+        <div>上書き予定</div>
         {items.slice(0, 5).map((item) => {
           const existing = recordsByDate.get(item.row.date);
           const rocket = existing?.services.rocket;
@@ -626,7 +626,7 @@ function ConfirmImportCard({
 }
 
 function formatCurrency(amount: number) {
-  return `￥${amount.toLocaleString()}`;
+  return `¥${amount.toLocaleString()}`;
 }
 
 function formatNumberInput(value: string) {

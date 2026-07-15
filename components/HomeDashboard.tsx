@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import AppHeader from "@/components/AppHeader";
+import AppInstallGuide from "@/components/AppInstallGuide";
 import BottomMenu from "@/components/BottomMenu";
 import FirstStepGuide from "@/components/FirstStepGuide";
 import PersonalDashboard from "@/components/PersonalDashboard";
@@ -187,6 +188,10 @@ function formatRankingValue(value: number, tab: RankingTab) {
   return `￥${value.toLocaleString()}`;
 }
 
+function dedupeRecords(records: StoredRecord[]) {
+  return mergeRecords(records as SharedRecord[], []) as StoredRecord[];
+}
+
 export default function HomeDashboard() {
   const [records, setRecords] = useState<StoredRecord[]>([]);
   const [displayName, setDisplayName] = useState("匿名配達員");
@@ -218,13 +223,15 @@ export default function HomeDashboard() {
       if (!raw) {
         setRecords([]);
         void fetchSharedRecords().then((remoteRecords) => {
-          if (remoteRecords.length > 0) setRecords(remoteRecords as StoredRecord[]);
+          if (remoteRecords.length > 0) {
+            setRecords(dedupeRecords(remoteRecords as StoredRecord[]));
+          }
         });
         return;
       }
       try {
         const localRecords = JSON.parse(raw) as StoredRecord[];
-        setRecords(localRecords);
+        setRecords(dedupeRecords(localRecords));
         void fetchSharedRecords().then((remoteRecords) => {
           if (remoteRecords.length === 0) return;
           setRecords(
@@ -465,6 +472,8 @@ export default function HomeDashboard() {
             </button>
           </div>
         </section>
+
+        <AppInstallGuide />
       </div>
 
       <BottomMenu />

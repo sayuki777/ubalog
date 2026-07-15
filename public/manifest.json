@@ -1,0 +1,9 @@
+{
+  "name": "ウバログ",
+  "short_name": "ウバログ",
+  "description": "配達員向けの売上記録アプリ",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#00a63e"
+}

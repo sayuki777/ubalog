@@ -5,6 +5,7 @@ export const metadata = {
   title: "ウバログ",
   description: "配達員向けの売上記録アプリ",
   applicationName: "ウバログ",
+  manifest: "/manifest.json",
 };
 
 export const viewport = {
@@ -12,7 +13,7 @@ export const viewport = {
   initialScale: 1,
   maximumScale: 1,
   viewportFit: "cover",
-  themeColor: "#16a34a",
+  themeColor: "#00a63e",
 };
 
 export default function RootLayout({

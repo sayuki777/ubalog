@@ -113,7 +113,7 @@ const rankingMetricOptions: {
   { key: "sales", label: "売上", className: "flex-[2]" },
   { key: "hourly", label: "時給", className: "flex-1" },
   { key: "deliveries", label: "件数", className: "flex-1" },
-  { key: "unitPrice", label: "単価", className: "flex-1" },
+  { key: "unitPrice", label: "報酬単価", className: "flex-[1.4]" },
 ];
 
 function toIsoDate(date: Date) {
@@ -263,6 +263,7 @@ function safeText(value?: string, maxLength = 24) {
 
 function recordUserKey(record: StoredRecord, profile: Profile | null) {
   return (
+    record.deviceId?.trim() ||
     record.userId?.trim() ||
     record.displayName?.trim() ||
     record.name?.trim() ||
@@ -309,6 +310,57 @@ function recordBelongsToUser(
     .filter(Boolean);
 
   return recordNames.some((name) => currentNames.includes(name));
+}
+
+function recordUpdatedTime(record: StoredRecord) {
+  const source = (record as StoredRecord & { updatedAt?: string; createdAt?: string });
+  return new Date(source.updatedAt || source.createdAt || "").getTime() || 0;
+}
+
+function rankingRecordKeys(record: StoredRecord, profile: Profile | null) {
+  const totalKey = String(record.total ?? 0);
+  const date = record.date;
+  const keys = [
+    record.deviceId ? `device:${record.deviceId}:${date}` : "",
+    record.userId ? `user:${record.userId}:${date}` : "",
+    record.displayName?.trim()
+      ? `display:${record.displayName.trim()}:${date}:${totalKey}`
+      : "",
+    record.name?.trim() ? `name:${record.name.trim()}:${date}:${totalKey}` : "",
+    record.rankingName?.trim()
+      ? `ranking:${record.rankingName.trim()}:${date}:${totalKey}`
+      : "",
+    record.nickname?.trim()
+      ? `nickname:${record.nickname.trim()}:${date}:${totalKey}`
+      : "",
+    `resolved:${displayNameFromRecord(record, profile)}:${date}:${totalKey}`,
+  ].filter(Boolean);
+
+  return keys.length > 0 ? keys : [`anonymous:${date}:${totalKey}`];
+}
+
+function chooseLatestRecord(current: StoredRecord | undefined, next: StoredRecord) {
+  if (!current) return next;
+  const currentTime = recordUpdatedTime(current);
+  const nextTime = recordUpdatedTime(next);
+  if (nextTime !== currentTime) return nextTime > currentTime ? next : current;
+  return next.total >= current.total ? next : current;
+}
+
+function dedupeRankingRecords(records: StoredRecord[], profile: Profile | null) {
+  const merged = new Map<string, StoredRecord>();
+  const aliases = new Map<string, string>();
+
+  for (const record of records) {
+    if (record.hidden === true) continue;
+    const keys = rankingRecordKeys(record, profile);
+    const primaryKey =
+      keys.map((key) => aliases.get(key)).find(Boolean) ?? keys[0];
+    merged.set(primaryKey, chooseLatestRecord(merged.get(primaryKey), record));
+    keys.forEach((key) => aliases.set(key, primaryKey));
+  }
+
+  return [...merged.values()];
 }
 
 function periodRecords(records: StoredRecord[], period: PeriodKey, calendarDate: string) {
@@ -399,7 +451,7 @@ function buildRankingEntries(
   aggregate: boolean,
   metric: RankingMetricKey
 ) {
-  const rankedRecords = records.filter(
+  const rankedRecords = dedupeRankingRecords(records, profile).filter(
     (record) => record.ranking !== false && record.total > 0
   );
 
@@ -494,7 +546,7 @@ function mainMetricValue(entry: RankingEntry, metric: RankingMetricKey) {
 function metricCaption(metric: RankingMetricKey) {
   if (metric === "hourly") return "時給順";
   if (metric === "deliveries") return "件数順";
-  if (metric === "unitPrice") return "単価順";
+  if (metric === "unitPrice") return "報酬単価順";
   return "売上順";
 }
 
@@ -517,13 +569,13 @@ function subMetrics(entry: RankingEntry, metric: RankingMetricKey) {
     return [
       `売上 ${formatCurrency(entry.total)}`,
       `時給 ${formatHourly(entry.hourly)}`,
-      `1件 ${formatUnitPrice(entry.unitPrice)}`,
+      `1件単価 ${formatUnitPrice(entry.unitPrice)}`,
     ];
   }
   return [
     `時給 ${formatHourly(entry.hourly)}`,
     `${entry.deliveries.toLocaleString()}件`,
-    `1件 ${formatUnitPrice(entry.unitPrice)}`,
+    `1件単価 ${formatUnitPrice(entry.unitPrice)}`,
   ];
 }
 
@@ -660,7 +712,6 @@ export default function RankingBoard() {
   const myRankIndex = rankingEntries.findIndex((entry) => entry.isCurrentUser);
   const showRankingAd = rankingEntries.length >= 2;
   const shouldFocusMe = focusMode === "me";
-  const focusedEntry = shouldFocusMe && myRankIndex >= 0 ? rankingEntries[myRankIndex] : null;
 
   const handleHideEntry = (entry: RankingEntry) => {
     const hiddenAt = new Date().toISOString();
@@ -708,13 +759,13 @@ export default function RankingBoard() {
 
       <div className="px-4 pt-2">
         <section className="rounded-2xl bg-white px-3 py-3 shadow-sm">
-          <div className="flex gap-1.5 overflow-x-auto pb-0.5">
+          <div className="grid grid-cols-3 gap-2">
             {periodOptions.map((item) => (
               <button
                 key={item.key}
                 type="button"
                 onClick={() => setPeriod(item.key)}
-                className={`shrink-0 rounded-full px-3 py-1.5 text-[11px] font-bold ${
+                className={`h-9 min-w-0 truncate rounded-full px-2 text-[11px] font-bold ${
                   period === item.key
                     ? "bg-green-600 text-white"
                     : "bg-gray-100 text-gray-600"
@@ -734,13 +785,13 @@ export default function RankingBoard() {
             />
           )}
 
-          <div className="mt-2 flex gap-1.5 overflow-x-auto pb-0.5">
+          <div className="mt-2 grid grid-cols-3 gap-2">
             {regionOptions.map((item) => (
               <button
                 key={item.key}
                 type="button"
                 onClick={() => setRegionFilter(item.key)}
-                className={`shrink-0 rounded-full px-3 py-1.5 text-[11px] font-bold ${
+                className={`h-9 min-w-0 truncate rounded-full px-2 text-[11px] font-bold ${
                   regionFilter === item.key
                     ? "bg-green-600 text-white"
                     : "bg-gray-100 text-gray-600"
@@ -792,12 +843,7 @@ export default function RankingBoard() {
             </div>
           ) : (
             <div className="space-y-3">
-              {shouldFocusMe && focusedEntry && (
-                <div className="rounded-2xl bg-green-50 px-3 py-3 text-sm font-bold text-green-800">
-                  あなたの順位 {myRankIndex + 1}位 / {rankingEntries.length}人中
-                </div>
-              )}
-              {shouldFocusMe && !focusedEntry && (
+              {shouldFocusMe && myRankIndex < 0 && (
                 <div className="rounded-2xl bg-amber-50 px-3 py-3 text-sm font-bold text-amber-800">
                   今回の記録はランキング対象外です。ランキングに参加するとここに表示されます。
                 </div>
@@ -917,13 +963,6 @@ function AdminHideRecordButton({ onHide }: { onHide: () => void }) {
   );
 }
 
-function medalForRank(rank: number) {
-  if (rank === 1) return "1";
-  if (rank === 2) return "2";
-  if (rank === 3) return "3";
-  return "";
-}
-
 function PodiumCard({
   entry,
   rank,
@@ -952,9 +991,6 @@ function PodiumCard({
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
           <div className="flex items-center gap-2">
-            <span className={rank === 1 ? "text-2xl" : "text-xl"}>
-              {medalForRank(rank)}
-            </span>
             <span
               className={
                 rank === 1
@@ -1007,11 +1043,6 @@ function PodiumCard({
           </div>
         ))}
       </div>
-      {entry.comment.trim() && (
-        <div className="mt-3 truncate rounded-xl bg-white/80 px-3 py-2 text-xs font-bold text-gray-700">
-          {entry.comment.trim()}
-        </div>
-      )}
     </button>
   );
 }
@@ -1110,12 +1141,7 @@ function RankingCard({
           </div>
         </div>
       </div>
-      {!isCompact && entry.comment.trim() && (
-        <div className="mt-2 truncate rounded-xl bg-gray-50 px-3 py-2 text-xs font-bold text-gray-700">
-          {entry.comment.trim()}
-        </div>
-      )}
-      {isSimple && !entry.comment.trim() && (
+      {isSimple && (
         <div className="mt-1 text-[11px] font-bold text-gray-400">
           {details.join(" / ")}
         </div>
