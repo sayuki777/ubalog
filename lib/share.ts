@@ -10,6 +10,13 @@ type RocketNowShareLike = {
   monthUnitPrice: number | null;
 };
 
+type RealtimeOfferShareLike = {
+  service?: string;
+  amount: number;
+  distanceKm: number;
+  unitPrice: number;
+};
+
 function yen(value: number) {
   return `¥${Math.max(0, Math.floor(value)).toLocaleString()}`;
 }
@@ -23,9 +30,6 @@ function workTime(minutes?: number) {
 }
 
 export function getShareUrl() {
-  if (typeof window !== "undefined" && window.location.origin) {
-    return window.location.origin;
-  }
   return "https://ubalog.vercel.app";
 }
 
@@ -49,7 +53,7 @@ export function buildRecordShareText(record: RecordShareLike) {
 
 export function buildUbalogShareText() {
   return [
-    "配達記録ランキングアプリ",
+    "配達記録アプリ",
     "「ウバログ」",
     "",
     "🏆 全国・都道府県別、エリア別",
@@ -84,6 +88,18 @@ export function buildRocketNowShareText(stats: RocketNowShareLike) {
   ].join("\n");
 }
 
+export function buildRealtimeOfferShareText(offer: RealtimeOfferShareLike) {
+  return [
+    `${offer.service || "フーデリ"}案件を共有しました！`,
+    `報酬 ${yen(offer.amount)} / ${offer.distanceKm.toLocaleString()}km`,
+    `単価 ${yen(offer.unitPrice)}/km`,
+    "",
+    "ウバログでリアルタイム共有中",
+    "#ウバログ #フードデリバリー",
+    "https://ubalog.vercel.app",
+  ].join("\n");
+}
+
 export function buildRankingShareText() {
   return [
     "ウバログのランキング更新中！",
@@ -99,7 +115,7 @@ export function openXShare(text: string, url = getShareUrl()) {
   if (typeof window === "undefined") return;
 
   const params = new URLSearchParams({ text });
-  if (url && !text.includes(url) && !text.includes("https://ubalog.vercel.app")) {
+  if (url && !text.includes(url)) {
     params.set("url", url);
   }
   window.open(`https://twitter.com/intent/tweet?${params.toString()}`, "_blank", "noopener,noreferrer");

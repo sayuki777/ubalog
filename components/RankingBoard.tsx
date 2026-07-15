@@ -1,6 +1,7 @@
-"use client";
+﻿"use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import AffiliateMiniAd from "@/components/AffiliateMiniAd";
 import AppHeader from "@/components/AppHeader";
@@ -19,14 +20,20 @@ import {
   mergeRecords,
   type SharedRecord,
 } from "@/lib/sharedRecords";
+import {
+  fetchSharedRealtimeOffers,
+  loadLocalRealtimeOffers,
+  mergeRealtimeOffers,
+  type SharedRealtimeOffer,
+} from "@/lib/realtime";
 
 const RECORDS_STORAGE_KEY = "ubalog-records";
 const PROFILE_STORAGE_KEY = "ubalog-profile";
 
 type ServiceKey = "uber" | "demae" | "menu" | "rocket" | "other";
 type PeriodKey = "today" | "yesterday" | "week" | "month" | "previousMonth" | "calendar";
-type RegionFilterKey = "全国" | "都道府県別" | "北日本" | "東日本" | "西日本" | "九州";
-type RankingMetricKey = "sales" | "hourly" | "deliveries";
+type RegionFilterKey = "全国" | "都道府県別" | "北海道" | "東日本" | "西日本" | "九州";
+type RankingMetricKey = "sales" | "hourly" | "deliveries" | "unitPrice";
 
 type Profile = {
   displayName?: string;
@@ -74,6 +81,7 @@ type RankingEntry = {
   comment: string;
   isCurrentUser: boolean;
   records: StoredRecord[];
+  offer?: SharedRealtimeOffer;
 };
 
 const periodOptions: { key: PeriodKey; label: string }[] = [
@@ -88,7 +96,7 @@ const periodOptions: { key: PeriodKey; label: string }[] = [
 const regionOptions: { key: RegionFilterKey; label: string }[] = [
   { key: "全国", label: "全国" },
   { key: "都道府県別", label: "都道府県" },
-  { key: "北日本", label: "北日本" },
+  { key: "北海道", label: "北海道" },
   { key: "東日本", label: "東日本" },
   { key: "西日本", label: "西日本" },
   { key: "九州", label: "九州" },
@@ -102,6 +110,7 @@ const rankingMetricOptions: {
   { key: "sales", label: "売上", className: "flex-[2]" },
   { key: "hourly", label: "時給", className: "flex-1" },
   { key: "deliveries", label: "件数", className: "flex-1" },
+  { key: "unitPrice", label: "単価", className: "flex-1" },
 ];
 
 function toIsoDate(date: Date) {
@@ -143,7 +152,7 @@ function currentWeekRange() {
 }
 
 function formatCurrency(amount: number) {
-  return `￥${amount.toLocaleString()}`;
+  return `・･${amount.toLocaleString()}`;
 }
 
 function formatMinutes(minutes: number) {
@@ -217,7 +226,7 @@ function displayNameFromProfile(profile: Profile | null) {
     profile?.name?.trim() ||
     profile?.rankingName?.trim() ||
     profile?.nickname?.trim() ||
-    "匿名配達員"
+    "蛹ｿ蜷埼・驕泌藤"
   );
 }
 
@@ -302,6 +311,31 @@ function periodRecords(records: StoredRecord[], period: PeriodKey, calendarDate:
   return records.filter((record) => record.date === calendarDate);
 }
 
+function offerDate(offer: SharedRealtimeOffer) {
+  const date = new Date(offer.createdAt);
+  return Number.isNaN(date.getTime()) ? "" : toIsoDate(date);
+}
+
+function periodOffers(offers: SharedRealtimeOffer[], period: PeriodKey, calendarDate: string) {
+  const today = todayIsoDate();
+  const yesterday = shiftIsoDate(today, -1);
+  const currentMonth = monthKey(new Date());
+  const previousMonth = previousMonthKey();
+  const week = currentWeekRange();
+
+  return offers.filter((offer) => {
+    if (offer.hidden === true || offer.unitPrice <= 0) return false;
+    const date = offerDate(offer);
+    if (!date) return false;
+    if (period === "today") return date === today;
+    if (period === "yesterday") return date === yesterday;
+    if (period === "week") return date >= week.start && date <= week.end;
+    if (period === "month") return date.startsWith(currentMonth);
+    if (period === "previousMonth") return date.startsWith(previousMonth);
+    return date === calendarDate;
+  });
+}
+
 function passesRegionFilter(
   record: StoredRecord,
   regionFilter: RegionFilterKey,
@@ -315,7 +349,7 @@ function passesRegionFilter(
     return Boolean(prefectureFilter) && recordPrefecture === prefectureFilter;
   }
   if (regionFilter === "九州") {
-    return recordRegion === "九州四国" || recordRegion === "九州";
+    return recordRegion === "九州沖縄" || recordRegion === "九州";
   }
   return recordRegion === regionFilter;
 }
@@ -330,6 +364,9 @@ function compareRankingEntries(
   }
   if (metric === "deliveries") {
     return b.deliveries - a.deliveries || b.total - a.total || b.hourly - a.hourly;
+  }
+  if (metric === "unitPrice") {
+    return b.unitPrice - a.unitPrice || b.total - a.total || b.deliveries - a.deliveries;
   }
   return b.total - a.total || b.hourly - a.hourly || b.deliveries - a.deliveries;
 }
@@ -402,46 +439,76 @@ function buildRankingEntries(
   return [...map.values()].sort((a, b) => compareRankingEntries(a, b, metric));
 }
 
+function buildRealtimeUnitPriceEntries(offers: SharedRealtimeOffer[]) {
+  return offers
+    .filter((offer) => offer.hidden !== true && offer.unitPrice > 0)
+    .map<RankingEntry>((offer) => ({
+      key: offer.id,
+      name: offer.name?.trim() || "匿名共有",
+      prefecture: "",
+      area: [offer.area, offer.shopName, offer.dropoffArea].filter(Boolean).join(" / "),
+      total: offer.amount,
+      workMinutes: 0,
+      deliveries: 0,
+      hourly: 0,
+      unitPrice: offer.unitPrice,
+      comment: offer.comment || `${offer.service} ${offer.distanceKm.toLocaleString()}km`,
+      isCurrentUser: false,
+      records: [],
+      offer,
+    }))
+    .sort((a, b) => compareRankingEntries(a, b, "unitPrice"));
+}
+
 function mainMetricValue(entry: RankingEntry, metric: RankingMetricKey) {
   if (metric === "hourly") return formatHourly(entry.hourly);
   if (metric === "deliveries") return `${entry.deliveries.toLocaleString()}件`;
+  if (metric === "unitPrice") return `${formatCurrency(entry.unitPrice)}/km`;
   return formatCurrency(entry.total);
 }
 
 function metricCaption(metric: RankingMetricKey) {
   if (metric === "hourly") return "時給順";
   if (metric === "deliveries") return "件数順";
+  if (metric === "unitPrice") return "単価順";
   return "売上順";
 }
 
 function subMetrics(entry: RankingEntry, metric: RankingMetricKey) {
+  if (metric === "unitPrice") {
+    return [
+      `報酬 ${formatCurrency(entry.total)}`,
+      entry.offer ? `距離 ${entry.offer.distanceKm.toLocaleString()}km` : "",
+      entry.offer ? `${entry.offer.service} / ${entry.offer.rank}ランク` : "",
+    ].filter(Boolean);
+  }
   if (metric === "hourly") {
     return [
-      `売上 ${formatCurrency(entry.total)}`,
-      `${entry.deliveries.toLocaleString()}件`,
-      `稼働 ${formatMinutes(entry.workMinutes)}`,
+      `螢ｲ荳・${formatCurrency(entry.total)}`,
+      `${entry.deliveries.toLocaleString()}莉ｶ`,
+      `遞ｼ蜒・${formatMinutes(entry.workMinutes)}`,
     ];
   }
   if (metric === "deliveries") {
     return [
-      `売上 ${formatCurrency(entry.total)}`,
-      `時給 ${formatHourly(entry.hourly)}`,
-      `1件 ${formatUnitPrice(entry.unitPrice)}`,
+      `螢ｲ荳・${formatCurrency(entry.total)}`,
+      `譎らｵｦ ${formatHourly(entry.hourly)}`,
+      `1莉ｶ ${formatUnitPrice(entry.unitPrice)}`,
     ];
   }
   return [
-    `時給 ${formatHourly(entry.hourly)}`,
-    `${entry.deliveries.toLocaleString()}件`,
-    `1件 ${formatUnitPrice(entry.unitPrice)}`,
+    `譎らｵｦ ${formatHourly(entry.hourly)}`,
+    `${entry.deliveries.toLocaleString()}莉ｶ`,
+    `1莉ｶ ${formatUnitPrice(entry.unitPrice)}`,
   ];
 }
 
 function periodLabel(period: PeriodKey, calendarDate: string) {
-  if (period === "today") return "今日";
-  if (period === "yesterday") return "昨日";
-  if (period === "week") return "今週";
-  if (period === "month") return "今月";
-  if (period === "previousMonth") return "前月";
+  if (period === "today") return "莉頑律";
+  if (period === "yesterday") return "譏ｨ譌･";
+  if (period === "week") return "莉企ｱ";
+  if (period === "month") return "莉頑怦";
+  if (period === "previousMonth") return "蜑肴怦";
   return calendarDate.replaceAll("-", "/");
 }
 
@@ -468,18 +535,28 @@ function dateFromQuery(value: string | null) {
   return value && /^\d{4}-\d{2}-\d{2}$/.test(value) ? value : todayIsoDate();
 }
 
+function metricFromQuery(value: string | null): RankingMetricKey {
+  const keys: RankingMetricKey[] = ["sales", "hourly", "deliveries", "unitPrice"];
+  return value && keys.includes(value as RankingMetricKey)
+    ? (value as RankingMetricKey)
+    : "sales";
+}
+
 export default function RankingBoard() {
   const searchParams = useSearchParams();
   const focusedEntryRef = useRef<HTMLDivElement | null>(null);
   const isAdmin = useAdminMode();
   const [records, setRecords] = useState<StoredRecord[]>([]);
+  const [realtimeOffers, setRealtimeOffers] = useState<SharedRealtimeOffer[]>([]);
   const [profile, setProfile] = useState<Profile | null>(null);
   const [activeUser, setActiveUser] = useState<UbalogUser | null>(null);
   const [period, setPeriod] = useState<PeriodKey>(() =>
     periodFromQuery(searchParams.get("period"))
   );
   const [regionFilter, setRegionFilter] = useState<RegionFilterKey>("全国");
-  const [rankingMetric, setRankingMetric] = useState<RankingMetricKey>("sales");
+  const [rankingMetric, setRankingMetric] = useState<RankingMetricKey>(() =>
+    metricFromQuery(searchParams.get("tab"))
+  );
   const [prefectureFilter, setPrefectureFilter] = useState("");
   const [calendarDate, setCalendarDate] = useState(() =>
     dateFromQuery(searchParams.get("date"))
@@ -498,10 +575,20 @@ export default function RankingBoard() {
       setActiveUser(getActiveUser());
       const localRecords = loadRecords();
       setRecords(localRecords);
+      const localOffers = loadLocalRealtimeOffers();
+      setRealtimeOffers(localOffers.filter((offer) => offer.hidden !== true));
       void fetchSharedRecords().then((remoteRecords) => {
         if (remoteRecords.length === 0) return;
         setRecords(
           mergeRecords(localRecords, remoteRecords) as StoredRecord[]
+        );
+      });
+      void fetchSharedRealtimeOffers().then((remoteOffers) => {
+        if (remoteOffers.length === 0) return;
+        setRealtimeOffers(
+          mergeRealtimeOffers(localOffers, remoteOffers).filter(
+            (offer) => offer.hidden !== true
+          )
         );
       });
       if (nextProfile?.prefecture) setPrefectureFilter(nextProfile.prefecture);
@@ -517,6 +604,11 @@ export default function RankingBoard() {
   }, []);
 
   const rankingEntries = useMemo(() => {
+    if (rankingMetric === "unitPrice") {
+      return buildRealtimeUnitPriceEntries(
+        periodOffers(realtimeOffers, period, calendarDate)
+      );
+    }
     const base = periodRecords(records, period, calendarDate).filter((record) =>
       passesRegionFilter(record, regionFilter, prefectureFilter)
     );
@@ -534,6 +626,7 @@ export default function RankingBoard() {
     prefectureFilter,
     profile,
     rankingMetric,
+    realtimeOffers,
     records,
     regionFilter,
   ]);
@@ -587,7 +680,7 @@ export default function RankingBoard() {
 
   return (
     <main className="mx-auto min-h-screen w-full max-w-[430px] bg-gray-50 pb-24">
-      <AppHeader title="ランキング" />
+      <AppHeader title="繝ｩ繝ｳ繧ｭ繝ｳ繧ｰ" />
 
       <div className="px-4 pt-2">
         <section className="rounded-2xl bg-white px-3 py-3 shadow-sm">
@@ -670,28 +763,35 @@ export default function RankingBoard() {
 
           {rankingEntries.length === 0 ? (
             <div className="rounded-xl bg-gray-50 px-4 py-8 text-center text-sm font-bold text-gray-500">
-              <div>まだランキング記録がありません</div>
+              <div>まだランキング記録はありません</div>
               <div className="mt-1 text-xs">条件を変えると表示される場合があります</div>
             </div>
           ) : (
             <div className="space-y-3">
               {shouldFocusMe && focusedEntry && (
                 <div className="rounded-2xl bg-green-50 px-3 py-3 text-sm font-bold text-green-800">
-                  あなたの順位: {myRankIndex + 1}位 / {rankingEntries.length}人中
+                  縺ゅ↑縺溘・鬆・ｽ・ {myRankIndex + 1}菴・/ {rankingEntries.length}莠ｺ荳ｭ
                 </div>
               )}
               {shouldFocusMe && !focusedEntry && (
                 <div className="rounded-2xl bg-amber-50 px-3 py-3 text-sm font-bold text-amber-800">
-                  今回の記録はランキング対象外です。ランキングに参加するとここに表示されます。
-                </div>
+                  莉雁屓縺ｮ險倬鹸縺ｯ繝ｩ繝ｳ繧ｭ繝ｳ繧ｰ蟇ｾ雎｡螟悶〒縺吶ゅΛ繝ｳ繧ｭ繝ｳ繧ｰ縺ｫ蜿ょ刈縺吶ｋ縺ｨ縺薙％縺ｫ陦ｨ遉ｺ縺輔ｌ縺ｾ縺吶・                </div>
               )}
               <div className="rounded-2xl bg-green-50 px-3 py-3 text-sm font-bold text-green-800">
                 {myRankIndex >= 0
-                  ? `この条件でのあなたの順位: ${myRankIndex + 1}位 / ${
+                  ? `この条件でのあなたの順位 ${myRankIndex + 1}位 / ${
                       rankingEntries.length
                     }人中`
-                  : "まだランキングに記録がありません。条件を変えると表示される場合があります"}
+                  : "まだランキングに記録はありません。条件を変えると表示される場合があります"}
               </div>
+              {rankingMetric === "unitPrice" && (
+                <Link
+                  href="/realtime"
+                  className="block rounded-2xl border border-green-100 bg-white px-3 py-3 text-sm font-bold text-green-700 active:bg-green-50"
+                >
+                  高単価案件を見つけたら共有してみよう
+                </Link>
+              )}
               {top3.map((entry, index) => (
                 <div
                   key={entry.key}
@@ -793,9 +893,9 @@ function AdminHideRecordButton({ onHide }: { onHide: () => void }) {
 }
 
 function medalForRank(rank: number) {
-  if (rank === 1) return "🥇";
-  if (rank === 2) return "🥈";
-  if (rank === 3) return "🥉";
+  if (rank === 1) return "1";
+  if (rank === 2) return "2";
+  if (rank === 3) return "3";
   return "";
 }
 
@@ -837,12 +937,10 @@ function PodiumCard({
                   : "text-sm font-black text-gray-900"
               }
             >
-              {rank}位
-            </span>
+              {rank}菴・            </span>
             {entry.isCurrentUser && (
               <span className="rounded-full bg-green-600 px-2 py-0.5 text-[10px] font-bold text-white">
-                あなた
-              </span>
+                縺ゅ↑縺・              </span>
             )}
           </div>
           <div
@@ -998,3 +1096,5 @@ function RankingCard({
     </button>
   );
 }
+
+

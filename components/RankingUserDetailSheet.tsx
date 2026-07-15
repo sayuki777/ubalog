@@ -1,7 +1,7 @@
 "use client";
 
 type ServiceKey = "uber" | "demae" | "menu" | "rocket" | "other";
-type RankingMetricKey = "sales" | "hourly" | "deliveries";
+type RankingMetricKey = "sales" | "hourly" | "deliveries" | "unitPrice";
 
 type RankingDetailRecord = {
   date: string;
@@ -24,7 +24,7 @@ export type RankingDetailEntry = {
 };
 
 function formatCurrency(amount: number) {
-  return `￥${amount.toLocaleString()}`;
+  return `¥${amount.toLocaleString()}`;
 }
 
 function formatMinutes(minutes: number) {
@@ -44,12 +44,14 @@ function formatUnitPrice(amount: number) {
 function mainMetricValue(entry: RankingDetailEntry, metric: RankingMetricKey) {
   if (metric === "hourly") return formatHourly(entry.hourly);
   if (metric === "deliveries") return `${entry.deliveries.toLocaleString()}件`;
+  if (metric === "unitPrice") return `${formatCurrency(entry.unitPrice)}/km`;
   return formatCurrency(entry.total);
 }
 
 function metricCaption(metric: RankingMetricKey) {
   if (metric === "hourly") return "時給順";
   if (metric === "deliveries") return "件数順";
+  if (metric === "unitPrice") return "単価順";
   return "売上順";
 }
 
@@ -156,12 +158,12 @@ export default function RankingUserDetailSheet({
           <DetailItem label="件数" value={`${entry.deliveries.toLocaleString()}件`} />
           <DetailItem label="1件単価" value={formatUnitPrice(entry.unitPrice)} />
           <DetailItem label="稼働時間" value={formatMinutes(entry.workMinutes)} />
-          <DetailItem label="記録日数" value={`${entry.records.length}日`} />
+          <DetailItem label="記録日数" value={entry.records.length ? `${entry.records.length}日` : ""} />
           <DetailItem label="都道府県" value={entry.prefecture} />
           <DetailItem label="エリア" value={entry.area} />
-          <DetailItem label="メイン配達サービス" value={mainService?.label} />
+          <DetailItem label="メインサービス" value={mainService?.label} />
           <DetailItem
-            label="サブ配達サービス"
+            label="サブサービス"
             value={subServices.map((service) => service.label).join(" / ")}
           />
           <DetailItem

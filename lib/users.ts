@@ -2,6 +2,7 @@ import { getRegionByPrefecture } from "@/lib/areas";
 
 const USERS_STORAGE_KEY = "ubalog-users";
 const ACTIVE_USER_STORAGE_KEY = "ubalog-active-user";
+const ANONYMOUS_NUMBER_STORAGE_KEY = "ubalog-anonymous-number";
 
 export type UbalogUser = {
   id: string;
@@ -20,6 +21,7 @@ export type ProfileLike = {
   fullName?: string;
   nickname?: string;
   rankingName?: string;
+  anonymousNumber?: string;
   prefecture?: string;
   region?: string;
   area?: string;
@@ -29,8 +31,28 @@ function storageAvailable() {
   return typeof window !== "undefined";
 }
 
+export function getAnonymousNumber() {
+  if (!storageAvailable()) return "0001";
+
+  const current = localStorage.getItem(ANONYMOUS_NUMBER_STORAGE_KEY);
+  if (/^\d{4}$/.test(current ?? "")) return current as string;
+
+  const next = String(Math.floor(Math.random() * 9999) + 1).padStart(4, "0");
+  localStorage.setItem(ANONYMOUS_NUMBER_STORAGE_KEY, next);
+  return next;
+}
+
+export function getAnonymousDisplayName() {
+  return `匿名${getAnonymousNumber()}`;
+}
+
+export function isAnonymousDisplayName(value?: string) {
+  const trimmed = value?.trim() ?? "";
+  return /^匿名\d{4}$/.test(trimmed) || trimmed === "匿名配達員";
+}
+
 export function normalizeUserName(name?: string) {
-  return name?.trim() || "匿名配達員";
+  return name?.trim() || getAnonymousDisplayName();
 }
 
 export function normalizeUserId(name: string) {
@@ -150,7 +172,7 @@ export function getDisplayNameFromProfileOrUser(
     user?.name?.trim() ||
     profile?.rankingName?.trim() ||
     profile?.nickname?.trim() ||
-    "匿名配達員"
+    getAnonymousDisplayName()
   );
 }
 

@@ -3,6 +3,7 @@
 import dynamic from "next/dynamic";
 import type { ReactNode } from "react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import Link from "next/link";
 import AppHeader from "@/components/AppHeader";
 import BottomMenu from "@/components/BottomMenu";
 import Toast from "@/components/Toast";
@@ -11,6 +12,7 @@ import {
   analyzeRocketNowOfferImageWithOcr,
   type RocketNowOcrProgress,
 } from "@/lib/rocketNowOcr";
+import { buildRealtimeOfferShareText, openXShare } from "@/lib/share";
 import { type RocketNowScanResult } from "@/lib/rocketNowScan";
 import { addBreakingRealtimeNews } from "@/lib/news";
 import {
@@ -357,6 +359,7 @@ export default function RealtimeBoard() {
   const [toastMessage, setToastMessage] = useState("共有しました");
   const [showToast, setShowToast] = useState(false);
   const [helpOpen, setHelpOpen] = useState(false);
+  const [lastSharedOffer, setLastSharedOffer] = useState<RealtimeOffer | null>(null);
 
   const readCurrentLocation = useCallback(() => {
     return new Promise<CurrentLocation | null>((resolve) => {
@@ -508,6 +511,7 @@ export default function RealtimeBoard() {
 
   const openShareSheet = () => {
     clearScanResult();
+    setLastSharedOffer(null);
     setShareOpen(true);
   };
 
@@ -694,6 +698,7 @@ export default function RealtimeBoard() {
     setShareImageMessage("");
     clearScanResult();
     setScanLoading(false);
+    setLastSharedOffer(newOffer);
     showMessage("共有しました");
   };
 
@@ -798,6 +803,37 @@ export default function RealtimeBoard() {
             ＋共有
           </button>
         </div>
+        )}
+
+        {lastSharedOffer && !shareOpen && !shareInputOpen && (
+          <div className="absolute bottom-28 left-3 z-[560] w-[calc(100%-7rem)] max-w-[300px] rounded-3xl border border-green-100 bg-white/95 p-3 shadow-2xl">
+            <div className="text-sm font-black text-gray-900">共有しました！</div>
+            <div className="mt-1 truncate text-xs font-bold text-green-700">
+              {lastSharedOffer.service} ￥{lastSharedOffer.amount.toLocaleString()} / {lastSharedOffer.distanceKm.toLocaleString()}km
+            </div>
+            <div className="mt-2 grid grid-cols-2 gap-2">
+              <button
+                type="button"
+                onClick={() => openXShare(buildRealtimeOfferShareText(lastSharedOffer))}
+                className="h-9 rounded-xl bg-green-600 px-2 text-xs font-bold text-white"
+              >
+                Xで共有
+              </button>
+              <button
+                type="button"
+                onClick={openShareSheet}
+                className="h-9 rounded-xl border border-green-200 bg-white px-2 text-xs font-bold text-green-700"
+              >
+                さらに共有
+              </button>
+            </div>
+            <Link
+              href="/ranking?tab=unitPrice"
+              className="mt-2 block rounded-xl bg-gray-50 px-3 py-2 text-center text-xs font-bold text-gray-700"
+            >
+              単価ランキングを見る
+            </Link>
+          </div>
         )}
 
         {!(positionMode === "map" && shareInputOpen && !shareOpen) && (

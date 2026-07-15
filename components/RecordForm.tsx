@@ -27,6 +27,8 @@ import {
 import {
   createUserFromInput,
   ensureActiveUserFromProfile,
+  getAnonymousDisplayName,
+  isAnonymousDisplayName,
   setActiveUser,
 } from "@/lib/users";
 import { saveRecordWithSync } from "@/lib/sharedRecords";
@@ -132,7 +134,7 @@ function profileDisplayName(profile: Profile) {
     profile.name?.trim() ||
     profile.rankingName?.trim() ||
     profile.nickname?.trim() ||
-    "匿名配達員"
+    getAnonymousDisplayName()
   );
 }
 
@@ -323,14 +325,14 @@ export default function RecordForm() {
       const current = records.find((item) => item.date === date);
       setRecordCount(records.length);
       setRecordGuideDismissed(readStorageBoolean(RECORD_GUIDE_DISMISSED_KEY));
-      setProfileName(
+      const storedName =
         profile.displayName ??
-          profile.name ??
-          activeUser?.name ??
-          profile.rankingName ??
-          profile.nickname ??
-          ""
-      );
+        profile.name ??
+        profile.rankingName ??
+        profile.nickname ??
+        activeUser?.name ??
+        "";
+      setProfileName(isAnonymousDisplayName(storedName) ? "" : storedName);
       setPrefecture(activeUser?.prefecture ?? profile.prefecture ?? "");
       setProfileArea(activeUser?.area ?? profile.area ?? "");
 
@@ -389,7 +391,13 @@ export default function RecordForm() {
   useEffect(() => {
     const syncProfileName = () => {
       const profile = loadProfile();
-      setProfileName(profileDisplayName(profile));
+      const storedName =
+        profile.displayName ??
+        profile.name ??
+        profile.rankingName ??
+        profile.nickname ??
+        "";
+      setProfileName(isAnonymousDisplayName(storedName) ? "" : storedName);
       setPrefecture(profile.prefecture ?? "");
       setProfileArea(profile.area ?? "");
     };
@@ -412,8 +420,8 @@ export default function RecordForm() {
     const currentProfile = loadProfile();
     const nextProfile: Profile = {
       ...currentProfile,
-      displayName: user.name,
-      name: user.name,
+      displayName: nextName.trim(),
+      name: nextName.trim(),
       prefecture: user.prefecture,
       region: user.region,
       area: user.area,
@@ -516,8 +524,8 @@ export default function RecordForm() {
     setActiveUser(activeUser);
     const nextProfile: Profile = {
       ...currentProfile,
-      displayName: activeUser.name,
-      name: activeUser.name,
+      displayName: profileName.trim(),
+      name: profileName.trim(),
       prefecture: activeUser.prefecture,
       region: activeUser.region,
       area: activeUser.area,
@@ -527,7 +535,7 @@ export default function RecordForm() {
     const newRecord: StoredRecord = {
       date,
       userId: activeUser.id,
-      name: profileDisplayName(nextProfile),
+      name: profileName.trim() || activeUser.name || profileDisplayName(nextProfile),
       prefecture: nextProfile.prefecture,
       region: nextProfile.region,
       area: nextProfile.area,
@@ -671,7 +679,7 @@ export default function RecordForm() {
             value={profileName}
             maxLength={10}
             onChange={(e) => handleNameChange(e.target.value)}
-            className="h-10 min-w-0 rounded-xl border border-gray-200 bg-gray-50 px-2 text-[13px] font-bold outline-none focus:border-green-500 focus:ring-2 focus:ring-green-100"
+            className="h-10 min-w-0 rounded-xl border border-yellow-200 bg-yellow-50 px-2 text-[13px] font-bold outline-none placeholder:text-yellow-500/60 focus:border-green-500 focus:ring-2 focus:ring-green-100"
             placeholder="表示名入力"
             aria-label="表示名入力"
           />
@@ -896,7 +904,7 @@ export default function RecordForm() {
             <RocketNowBulkImportPanel
               selectedDate={date}
               profile={{
-                name: profileName || "匿名配達員",
+                name: profileName.trim() || getAnonymousDisplayName(),
                 prefecture,
                 area: profileArea,
               }}

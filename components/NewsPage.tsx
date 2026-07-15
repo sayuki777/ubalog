@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import AffiliateMiniAd from "@/components/AffiliateMiniAd";
 import AppHeader from "@/components/AppHeader";
 import BottomMenu from "@/components/BottomMenu";
@@ -134,6 +134,7 @@ export default function NewsPage() {
   const [profile, setProfile] = useState<NewsProfile>({});
   const [message, setMessage] = useState("");
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const touchStartYRef = useRef<number | null>(null);
 
   const loadPersonal = () => {
     setProfile(loadProfile());
@@ -179,20 +180,21 @@ export default function NewsPage() {
       slot: 0,
       driverWeight: 0.4,
     });
-    const second =
-      filteredItems.length >= 6
-        ? pickAffiliateAd({
-            placement: "news-all",
-            slot: 1,
-            driverWeight: 0.4,
-            excludeIds: first ? [first.id] : [],
-          })
-        : null;
-
-    return [first, second].filter(Boolean);
+    return [first].filter(Boolean);
+  }, [activeTab, filteredItems.length]);
+  const personalAd = useMemo(() => {
+    if (activeTab !== "personal" || filteredItems.length === 0 || !shouldShowCustomerAffiliateAds()) {
+      return null;
+    }
+    return pickAffiliateAd({
+      placement: "news-personal",
+      slot: 0,
+      driverWeight: 0.4,
+    });
   }, [activeTab, filteredItems.length]);
 
   const handleRefresh = async () => {
+    if (isRefreshing) return;
     setIsRefreshing(true);
     const next = regenerateNewsFromRecords(loadRecords());
     setPersonalItems(next);
@@ -200,6 +202,21 @@ export default function NewsPage() {
     setExternalItems(external);
     setMessage("ニュースを更新しました");
     setIsRefreshing(false);
+  };
+
+  const handleTouchStart = (event: React.TouchEvent<HTMLDivElement>) => {
+    if (window.scrollY > 4) return;
+    touchStartYRef.current = event.touches[0]?.clientY ?? null;
+  };
+
+  const handleTouchEnd = (event: React.TouchEvent<HTMLDivElement>) => {
+    const startY = touchStartYRef.current;
+    touchStartYRef.current = null;
+    if (startY === null || window.scrollY > 8) return;
+    const endY = event.changedTouches[0]?.clientY ?? startY;
+    if (endY - startY > 72) {
+      void handleRefresh();
+    }
   };
 
   const handleWeeklySummary = () => {
@@ -227,7 +244,11 @@ export default function NewsPage() {
     <main className="mx-auto min-h-screen w-full max-w-[430px] bg-gray-50 pb-24">
       <AppHeader title="ニュース" />
 
-      <div className="px-4 pt-1">
+      <div
+        className="px-4 pt-1"
+        onTouchStart={handleTouchStart}
+        onTouchEnd={handleTouchEnd}
+      >
         <section className="hidden">
           <h1 className="text-xl font-bold text-gray-900">ニュース</h1>
           <div className="mt-3 rounded-2xl bg-gray-50 px-3 py-3 text-sm font-bold text-gray-500">
@@ -294,9 +315,11 @@ export default function NewsPage() {
                     <AffiliateMiniAd ad={newsAds[0]} placement="news-all" slot={0} />
                   </div>
                 )}
-                {index === 2 && newsAds[1] && (
+                {activeTab === "personal" &&
+                  personalAd &&
+                  index === Math.min(2, filteredItems.length - 1) && (
                   <div className="py-2">
-                    <AffiliateMiniAd ad={newsAds[1]} placement="news-all" slot={1} />
+                    <AffiliateMiniAd ad={personalAd} placement="news-personal" slot={0} />
                   </div>
                 )}
               </div>
