@@ -27,17 +27,30 @@ import {
 import {
   createUserFromInput,
   ensureActiveUserFromProfile,
+  getActiveUser,
   getAnonymousDisplayName,
   isAnonymousDisplayName,
   setActiveUser,
 } from "@/lib/users";
-import { saveRecordWithSync } from "@/lib/sharedRecords";
+import { fetchSharedRecords, mergeRecords, saveRecordWithSync } from "@/lib/sharedRecords";
 import { buildRecordShareText, openXShare } from "@/lib/share";
 
 const STORAGE_KEY = "ubalog-records";
 const PROFILE_STORAGE_KEY = "ubalog-profile";
 const LAST_WORK_TIME_STORAGE_KEY = "ubalog-last-work-time";
 const BREAK_MINUTE_OPTIONS = Array.from({ length: 37 }, (_, index) => index * 5);
+const MAX_AMOUNT = 300000;
+const MAX_DELIVERIES = 500;
+const MAX_WORK_MINUTES = 1440;
+const MAX_COMMENT_LENGTH = 25;
+const MAX_NAME_LENGTH = 20;
+const WORK_TIME_TEMPLATES = [
+  { label: "9-15", startTime: "09:00", endTime: "15:00", breakMinutes: 30 },
+  { label: "10-16", startTime: "10:00", endTime: "16:00", breakMinutes: 30 },
+  { label: "11-17", startTime: "11:00", endTime: "17:00", breakMinutes: 30 },
+  { label: "17-22", startTime: "17:00", endTime: "22:00", breakMinutes: 0 },
+  { label: "18-23", startTime: "18:00", endTime: "23:00", breakMinutes: 0 },
+];
 
 type CongratsState = {
   type: "daily" | "weekly" | "monthly";
@@ -233,6 +246,29 @@ function formatCurrency(amount: number) {
   return `￥${amount.toLocaleString()}`;
 }
 
+function clampNumber(value: number, min: number, max: number) {
+  if (!Number.isFinite(value)) return min;
+  return Math.min(Math.max(Math.floor(value), min), max);
+}
+
+function numericInputValue(value: string, max: number) {
+  const digits = value.replace(/[^\d]/g, "");
+  if (!digits) return "";
+  return String(clampNumber(Number(digits), 0, max));
+}
+
+function amountFromInput(value: string) {
+  return clampNumber(parseInt(value || "0", 10) || 0, 0, MAX_AMOUNT);
+}
+
+function deliveriesFromInput(value: string) {
+  return clampNumber(parseInt(value || "0", 10) || 0, 0, MAX_DELIVERIES);
+}
+
+function cleanText(value: string, maxLength: number) {
+  return value.replace(/[\u0000-\u001F\u007F]/g, "").trim().slice(0, maxLength);
+}
+
 function formatBreakMinutes(minutes: number) {
   const h = Math.floor(minutes / 60);
   const m = minutes % 60;
@@ -249,7 +285,7 @@ function rankingUrlForDate(value: string) {
   } else if (value === yesterday) {
     params.set("period", "yesterday");
   } else {
-    params.set("period", "calendar");
+    params.set("period", "date");
   }
 
   return `/ranking?${params.toString()}`;
@@ -305,6 +341,8 @@ export default function RecordForm() {
   const [afterSaveMessage, setAfterSaveMessage] = useState("");
   const [lastSavedRecord, setLastSavedRecord] = useState<StoredRecord | null>(null);
   const [rocketBulkLaunchToken, setRocketBulkLaunchToken] = useState(0);
+  const [copyMessage, setCopyMessage] = useState("");
+  const [copyingYesterday, setCopyingYesterday] = useState(false);
 
   useEffect(() => {
     const queryDate = searchParams.get("date");
@@ -431,7 +469,7 @@ export default function RecordForm() {
   };
 
   const handleNameChange = (value: string) => {
-    const next = value.slice(0, 10);
+    const next = cleanText(value, MAX_NAME_LENGTH);
     setProfileName(next);
     saveUserInfo(next, prefecture, profileArea);
   };
@@ -448,11 +486,11 @@ export default function RecordForm() {
 
   const total = useMemo(() => {
     return (
-      (parseInt(uber || "0", 10) || 0) +
-      (parseInt(demae || "0", 10) || 0) +
-      (parseInt(menu || "0", 10) || 0) +
-      (parseInt(rocket || "0", 10) || 0) +
-      (parseInt(other || "0", 10) || 0)
+      amountFromInput(uber) +
+      amountFromInput(demae) +
+      amountFromInput(menu) +
+      amountFromInput(rocket) +
+      amountFromInput(other)
     );
   }, [uber, demae, menu, rocket, other]);
 
@@ -463,8 +501,8 @@ export default function RecordForm() {
     if ([sh, sm, eh, em].some((value) => Number.isNaN(value))) return 0;
     const start = sh * 60 + sm;
     const end = eh * 60 + em;
-    const rest = parseInt(breakTime || "0", 10) || 0;
-    return Math.max(end - start - rest, 0);
+    const rest = clampNumber(parseInt(breakTime || "0", 10) || 0, 0, MAX_WORK_MINUTES);
+    return clampNumber(end - start - rest, 0, MAX_WORK_MINUTES);
   }, [startTime, endTime, breakTime]);
 
   const hourly = useMemo(() => {
@@ -502,6 +540,88 @@ export default function RecordForm() {
     setRocketBulkLaunchToken(Date.now());
   };
 
+  const totalDeliveriesInput =
+    deliveriesFromInput(uberCount) +
+    deliveriesFromInput(demaeCount) +
+    deliveriesFromInput(menuCount) +
+    deliveriesFromInput(rocketCount) +
+    deliveriesFromInput(otherCount);
+  const savePreview =
+    total > 0
+      ? `保存内容 ${formatCurrency(total)} / ${totalDeliveriesInput.toLocaleString()}件 / 稼働${workText}`
+      : "売上を入力してください";
+
+  const applyWorkTimeTemplate = (
+    template: { startTime: string; endTime: string; breakMinutes: number } | null
+  ) => {
+    if (!template) {
+      setBreakTime("0");
+      return;
+    }
+    setStartTime(template.startTime);
+    setEndTime(template.endTime);
+    setBreakTime(String(template.breakMinutes));
+  };
+
+  const applyCopiedRecord = (record: StoredRecord) => {
+    const copiedName = cleanText(
+      ((record as StoredRecord & { displayName?: string }).displayName ?? record.name ?? ""),
+      MAX_NAME_LENGTH
+    );
+    setProfileName(isAnonymousDisplayName(copiedName) ? "" : copiedName);
+    setPrefecture(cleanText(record.prefecture ?? "", 20));
+    setProfileArea(cleanText(record.area ?? "", 20));
+    setStartTime(record.startTime ?? "");
+    setEndTime(record.endTime ?? "");
+    setBreakTime(String(clampNumber(record.breakMinutes ?? 0, 0, MAX_WORK_MINUTES)));
+    setUber("");
+    setDemae("");
+    setMenu("");
+    setRocket("");
+    setOther("");
+    setUberCount(String(clampNumber(record.services.uber.deliveries ?? 0, 0, MAX_DELIVERIES)));
+    setDemaeCount(String(clampNumber(record.services.demae.deliveries ?? 0, 0, MAX_DELIVERIES)));
+    setMenuCount(String(clampNumber(record.services.menu.deliveries ?? 0, 0, MAX_DELIVERIES)));
+    setRocketCount(String(clampNumber(record.services.rocket.deliveries ?? 0, 0, MAX_DELIVERIES)));
+    setOtherCount(String(clampNumber(record.services.other.deliveries ?? 0, 0, MAX_DELIVERIES)));
+    setRanking(record.ranking !== false);
+    setComment("");
+  };
+
+  const handleCopyYesterday = async () => {
+    if (copyingYesterday) return;
+    setCopyingYesterday(true);
+    setCopyMessage("");
+    const yesterday = offsetIsoDate(-1);
+    const localRecords = loadRecords();
+    let records = localRecords;
+
+    try {
+      const remoteRecords = await fetchSharedRecords();
+      records = mergeRecords(localRecords, remoteRecords) as StoredRecord[];
+    } catch {
+      records = localRecords;
+    }
+
+    const activeUser = getActiveUser();
+    const currentName = profileName.trim() || profileDisplayName(loadProfile());
+    const yesterdayRecords = records.filter((record) => record.date === yesterday);
+    const matched =
+      yesterdayRecords.find((record) => record.userId && record.userId === activeUser?.id) ??
+      yesterdayRecords.find((record) => (record.name ?? "").trim() === currentName.trim()) ??
+      yesterdayRecords[0];
+
+    if (!matched) {
+      setCopyMessage("昨日の記録が見つかりませんでした");
+      setCopyingYesterday(false);
+      return;
+    }
+
+    applyCopiedRecord(matched);
+    setCopyMessage("昨日の時間と件数をコピーしました。金額は入力してください");
+    setCopyingYesterday(false);
+  };
+
   const handleSave = () => {
     if (saving) return;
 
@@ -510,16 +630,44 @@ export default function RecordForm() {
     const existing = records.find((item) => item.date === date);
     const isFirstRecordSave = records.length === 0 && !existing;
     const currentProfile = loadProfile();
+    const safeName = cleanText(profileName, MAX_NAME_LENGTH);
+    const safeComment = cleanText(comment, MAX_COMMENT_LENGTH);
+    const safeBreakMinutes = clampNumber(parseInt(breakTime || "0", 10) || 0, 0, MAX_WORK_MINUTES);
+    const safeWorkMinutes = clampNumber(workMinutes, 0, MAX_WORK_MINUTES);
+    const safeServices = {
+      uber: {
+        amount: amountFromInput(uber),
+        deliveries: deliveriesFromInput(uberCount),
+      },
+      demae: {
+        amount: amountFromInput(demae),
+        deliveries: deliveriesFromInput(demaeCount),
+      },
+      menu: {
+        amount: amountFromInput(menu),
+        deliveries: deliveriesFromInput(menuCount),
+      },
+      rocket: {
+        amount: amountFromInput(rocket),
+        deliveries: deliveriesFromInput(rocketCount),
+      },
+      other: {
+        amount: amountFromInput(other),
+        deliveries: deliveriesFromInput(otherCount),
+      },
+    };
+    const safeTotal = Object.values(safeServices).reduce((sum, service) => sum + service.amount, 0);
+    const safeHourly = safeWorkMinutes > 0 ? Math.floor(safeTotal / (safeWorkMinutes / 60)) : 0;
     const activeUser = createUserFromInput({
-      name: profileName,
+      name: safeName,
       prefecture,
       area: profileArea,
     });
     setActiveUser(activeUser);
     const nextProfile: Profile = {
       ...currentProfile,
-      displayName: profileName.trim(),
-      name: profileName.trim(),
+      displayName: safeName,
+      name: safeName,
       prefecture: activeUser.prefecture,
       region: activeUser.region,
       area: activeUser.area,
@@ -529,39 +677,18 @@ export default function RecordForm() {
     const newRecord: StoredRecord = {
       date,
       userId: activeUser.id,
-      name: profileName.trim() || activeUser.name || profileDisplayName(nextProfile),
+      name: safeName || activeUser.name || profileDisplayName(nextProfile),
       prefecture: nextProfile.prefecture,
       region: nextProfile.region,
       area: nextProfile.area,
-      comment: comment.trim(),
+      comment: safeComment,
       startTime,
       endTime,
-      breakMinutes: parseInt(breakTime || "0", 10) || 0,
-      services: {
-        uber: {
-          amount: parseInt(uber || "0", 10) || 0,
-          deliveries: parseInt(uberCount || "0", 10) || 0,
-        },
-        demae: {
-          amount: parseInt(demae || "0", 10) || 0,
-          deliveries: parseInt(demaeCount || "0", 10) || 0,
-        },
-        menu: {
-          amount: parseInt(menu || "0", 10) || 0,
-          deliveries: parseInt(menuCount || "0", 10) || 0,
-        },
-        rocket: {
-          amount: parseInt(rocket || "0", 10) || 0,
-          deliveries: parseInt(rocketCount || "0", 10) || 0,
-        },
-        other: {
-          amount: parseInt(other || "0", 10) || 0,
-          deliveries: parseInt(otherCount || "0", 10) || 0,
-        },
-      },
-      total,
-      workMinutes,
-      hourly,
+      breakMinutes: safeBreakMinutes,
+      services: safeServices,
+      total: safeTotal,
+      workMinutes: safeWorkMinutes,
+      hourly: safeHourly,
       ranking,
       createdAt: existing?.createdAt ?? now,
       updatedAt: now,
@@ -578,7 +705,7 @@ export default function RecordForm() {
       saveLastWorkTime({
         startTime,
         endTime,
-        breakMinutes: parseInt(breakTime || "0", 10) || 0,
+        breakMinutes: safeBreakMinutes,
       });
     }
     addNewsForRecord(newRecord, next);
@@ -667,7 +794,7 @@ export default function RecordForm() {
           <input
             type="text"
             value={profileName}
-            maxLength={10}
+            maxLength={MAX_NAME_LENGTH}
             onChange={(e) => handleNameChange(e.target.value)}
             className="h-10 min-w-0 rounded-xl border border-yellow-200 bg-yellow-50 px-2 text-[13px] font-bold outline-none placeholder:text-yellow-500/60 focus:border-green-500 focus:ring-2 focus:ring-green-100"
             placeholder="表示名入力"
@@ -700,13 +827,13 @@ export default function RecordForm() {
           <div className="flex items-end justify-between gap-3">
             <div>
               <div className="text-[11px] font-bold text-green-700">合計</div>
-              <div className="text-xl font-black text-gray-900">
+              <div className="text-2xl font-black leading-tight text-gray-950">
                 ￥{total.toLocaleString()}
               </div>
             </div>
             <div className="text-right">
               <div className="text-[11px] font-bold text-green-700">時給</div>
-              <div className="text-xl font-black text-gray-900">
+              <div className="text-lg font-black text-gray-900">
                 ￥{hourly.toLocaleString()}
               </div>
             </div>
@@ -765,6 +892,19 @@ export default function RecordForm() {
               昨日
             </button>
           </div>
+          <button
+            type="button"
+            onClick={() => void handleCopyYesterday()}
+            disabled={copyingYesterday}
+            className="mt-3 h-9 w-full rounded-xl border border-green-100 bg-green-50 px-3 text-xs font-black text-green-700 active:bg-green-100 disabled:opacity-60"
+          >
+            {copyingYesterday ? "コピー中..." : "昨日の記録をコピー"}
+          </button>
+          {copyMessage && (
+            <div className="mt-2 rounded-xl bg-gray-50 px-3 py-2 text-xs font-bold text-gray-600">
+              {copyMessage}
+            </div>
+          )}
         </div>
 
         <div className="rounded-2xl bg-white p-4 shadow-sm">
@@ -811,6 +951,26 @@ export default function RecordForm() {
             </select>
           </div>
 
+          <div className="mt-3 flex flex-wrap gap-2">
+            {WORK_TIME_TEMPLATES.map((template) => (
+              <button
+                key={template.label}
+                type="button"
+                onClick={() => applyWorkTimeTemplate(template)}
+                className="rounded-full bg-gray-100 px-3 py-1.5 text-xs font-black text-gray-700 active:bg-gray-200"
+              >
+                {template.label}
+              </button>
+            ))}
+            <button
+              type="button"
+              onClick={() => applyWorkTimeTemplate(null)}
+              className="rounded-full bg-green-50 px-3 py-1.5 text-xs font-black text-green-700 active:bg-green-100"
+            >
+              休憩なし
+            </button>
+          </div>
+
           <div className="mt-4 space-y-3">
             <Row company="Uber" value={uber} count={uberCount} onChange={setUber} onCountChange={setUberCount} />
             <Row company="出前館" value={demae} count={demaeCount} onChange={setDemae} onCountChange={setDemaeCount} />
@@ -824,8 +984,8 @@ export default function RecordForm() {
               scanControl={
                 <button
                   type="button"
-                  title="ロケナウ一気読み"
-                  aria-label="ロケナウ一気読み"
+                  title="ロケナウスキャン"
+                  aria-label="ロケナウスキャン"
                   onClick={openRocketBulkImport}
                   className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-green-200 bg-green-50 text-lg font-black text-green-700 active:bg-green-100"
                 >
@@ -841,8 +1001,8 @@ export default function RecordForm() {
             <input
               type="text"
               value={comment}
-              maxLength={25}
-              onChange={(e) => setComment(e.target.value.slice(0, 25))}
+              maxLength={MAX_COMMENT_LENGTH}
+              onChange={(e) => setComment(cleanText(e.target.value, MAX_COMMENT_LENGTH))}
               className="mt-2 h-11 w-full rounded-xl border border-gray-200 bg-white px-3 text-sm outline-none focus:border-green-500 focus:ring-2 focus:ring-green-100"
               placeholder="最大25文字"
             />
@@ -918,7 +1078,7 @@ export default function RecordForm() {
         </div>
       </div>
 
-      <SaveButton onClick={handleSave} />
+      <SaveButton onClick={handleSave} preview={savePreview} disabled={saving} />
       <BottomMenu />
     </main>
   );
@@ -957,7 +1117,7 @@ function Row({
             inputMode="numeric"
             value={value}
             placeholder="0"
-            onChange={(e) => onChange(e.target.value.replace(/[^\d]/g, ""))}
+            onChange={(e) => onChange(numericInputValue(e.target.value, MAX_AMOUNT))}
             className="w-full min-w-0 border-none bg-transparent text-right text-sm outline-none"
           />
         </div>
@@ -968,7 +1128,7 @@ function Row({
             inputMode="numeric"
             value={count}
             placeholder="0"
-            onChange={(e) => onCountChange(e.target.value.replace(/[^\d]/g, ""))}
+            onChange={(e) => onCountChange(numericInputValue(e.target.value, MAX_DELIVERIES))}
             className="w-full min-w-0 border-none bg-transparent text-right text-sm outline-none"
           />
           <span className="ml-1 shrink-0 text-sm text-gray-500">{"\u4ef6"}</span>

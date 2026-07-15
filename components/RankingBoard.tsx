@@ -630,6 +630,7 @@ function regionLabel(region: RegionFilterKey, prefecture: string) {
 }
 
 function periodFromQuery(value: string | null): PeriodKey {
+  if (value === "date") return "calendar";
   const periodKeys: PeriodKey[] = [
     "today",
     "yesterday",
