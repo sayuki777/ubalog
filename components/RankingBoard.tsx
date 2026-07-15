@@ -87,6 +87,21 @@ type RankingEntry = {
   offer?: SharedRealtimeOffer;
 };
 
+const PARTICIPATE_UNIT_PRICE_LINK = (
+  <Link
+    href="/realtime"
+    className="block rounded-2xl border border-green-100 bg-green-50 px-3 py-3 text-sm font-bold text-green-800 active:bg-green-100"
+  >
+    <div>高単価案件を見つけたら共有しよう</div>
+    <div className="mt-1 text-xs text-green-700">
+      リアルタイム共有で単価ランキングに参加できます
+    </div>
+    <div className="mt-2 inline-flex rounded-full bg-green-600 px-3 py-1.5 text-xs text-white">
+      案件を共有する
+    </div>
+  </Link>
+);
+
 const periodOptions: { key: PeriodKey; label: string }[] = [
   { key: "today", label: "今日" },
   { key: "yesterday", label: "昨日" },
@@ -170,6 +185,17 @@ function formatHourly(amount: number) {
 
 function formatUnitPrice(amount: number) {
   return amount > 0 ? formatCurrency(amount) : "-";
+}
+
+function formatOfferAge(createdAt?: string) {
+  const time = new Date(createdAt ?? "").getTime();
+  if (!time) return "-";
+  const diffMinutes = Math.max(0, Math.floor((Date.now() - time) / 60000));
+  if (diffMinutes < 1) return "たった今";
+  if (diffMinutes < 60) return `${diffMinutes}分前`;
+  const diffHours = Math.floor(diffMinutes / 60);
+  if (diffHours < 24) return `${diffHours}時間前`;
+  return `${Math.floor(diffHours / 24)}日前`;
 }
 
 function totalDeliveries(record: StoredRecord) {
@@ -514,25 +540,31 @@ function buildRankingEntries(
 
 function buildRealtimeUnitPriceEntries(offers: SharedRealtimeOffer[]) {
   return offers
-    .filter((offer) => offer.hidden !== true && offer.unitPrice > 0)
-    .map<RankingEntry>((offer) => ({
-      key: offer.id,
-      name: sanitizeDisplayName(offer.name),
-      prefecture: "",
-      area: [offer.area, offer.shopName, offer.dropoffArea]
-        .map((value) => safeText(String(value ?? ""), 12))
-        .filter(Boolean)
-        .join(" / "),
-      total: offer.amount,
-      workMinutes: 0,
-      deliveries: 0,
-      hourly: 0,
-      unitPrice: offer.unitPrice,
-      comment: safeText(offer.comment, 24) || `${offer.service} ${offer.distanceKm.toLocaleString()}km`,
-      isCurrentUser: false,
-      records: [],
-      offer,
-    }))
+    .map<RankingEntry | null>((offer) => {
+      if (offer.hidden === true || offer.amount <= 0 || offer.distanceKm <= 0) {
+        return null;
+      }
+      const unitPrice =
+        offer.unitPrice > 0 ? offer.unitPrice : Math.floor(offer.amount / offer.distanceKm);
+      if (unitPrice <= 0) return null;
+
+      return {
+        key: offer.id,
+        name: sanitizeDisplayName(offer.name),
+        prefecture: "",
+        area: safeText(String(offer.area ?? ""), 16),
+        total: offer.amount,
+        workMinutes: 0,
+        deliveries: 0,
+        hourly: 0,
+        unitPrice,
+        comment: "",
+        isCurrentUser: false,
+        records: [],
+        offer: { ...offer, unitPrice },
+      };
+    })
+    .filter((entry): entry is RankingEntry => Boolean(entry))
     .sort((a, b) => compareRankingEntries(a, b, "unitPrice"));
 }
 
@@ -555,7 +587,7 @@ function subMetrics(entry: RankingEntry, metric: RankingMetricKey) {
     return [
       `報酬 ${formatCurrency(entry.total)}`,
       entry.offer ? `距離 ${entry.offer.distanceKm.toLocaleString()}km` : "",
-      entry.offer ? `${entry.offer.service} / ${entry.offer.rank}ランク` : "",
+      entry.offer ? `サービス ${entry.offer.service}` : "",
     ].filter(Boolean);
   }
   if (metric === "hourly") {
@@ -711,7 +743,7 @@ export default function RankingBoard() {
   const top3 = rankingEntries.slice(0, 3);
   const others = rankingEntries.slice(3);
   const myRankIndex = rankingEntries.findIndex((entry) => entry.isCurrentUser);
-  const showRankingAd = rankingEntries.length >= 2;
+  const showRankingAd = rankingMetric !== "unitPrice" && rankingEntries.length >= 2;
   const shouldFocusMe = focusMode === "me";
 
   const switchRankingMetric = (direction: 1 | -1) => {
@@ -814,9 +846,20 @@ export default function RankingBoard() {
           </div>
 
           {rankingEntries.length === 0 ? (
-            <div className="rounded-xl bg-gray-50 px-4 py-8 text-center text-sm font-bold text-gray-500">
-              <div>まだランキング記録はありません</div>
-              <div className="mt-1 text-xs">条件を変えると表示される場合があります</div>
+            <div className="space-y-3">
+              <div className="rounded-xl bg-gray-50 px-4 py-8 text-center text-sm font-bold text-gray-500">
+                <div>
+                  {rankingMetric === "unitPrice"
+                    ? "まだ単価ランキングはありません"
+                    : "まだランキング記録はありません"}
+                </div>
+                <div className="mt-1 text-xs">
+                  {rankingMetric === "unitPrice"
+                    ? "良い案件を見つけたら共有してみましょう"
+                    : "条件を変えると表示される場合があります"}
+                </div>
+              </div>
+              {rankingMetric === "unitPrice" && PARTICIPATE_UNIT_PRICE_LINK}
             </div>
           ) : (
             <div className="space-y-3">
@@ -825,21 +868,11 @@ export default function RankingBoard() {
                   今回の記録はランキング対象外です。ランキングに参加するとここに表示されます。
                 </div>
               )}
-              <div className="rounded-2xl bg-green-50 px-3 py-3 text-sm font-bold text-green-800">
+              <div className="rounded-2xl bg-green-50 px-3 py-2 text-sm font-bold text-green-800">
                 {myRankIndex >= 0
-                  ? `この条件でのあなたの順位 ${myRankIndex + 1}位 / ${
-                      rankingEntries.length
-                    }人中`
-                  : "まだランキングに記録はありません。条件を変えると表示される場合があります"}
+                  ? `あなたの順位 ${myRankIndex + 1}位 / ${rankingEntries.length}人中`
+                  : "この条件ではまだ順位がありません"}
               </div>
-              {rankingMetric === "unitPrice" && (
-                <Link
-                  href="/realtime"
-                  className="block rounded-2xl border border-green-100 bg-white px-3 py-3 text-sm font-bold text-green-700 active:bg-green-50"
-                >
-                  高単価案件を見つけたら共有してみよう
-                </Link>
-              )}
               {top3.map((entry, index) => (
                 <div
                   key={entry.key}
@@ -880,6 +913,7 @@ export default function RankingBoard() {
                   )}
                 </div>
               ))}
+              {rankingMetric === "unitPrice" && PARTICIPATE_UNIT_PRICE_LINK}
             </div>
           )}
         </section>
@@ -1013,6 +1047,10 @@ function PodiumCard({
   metric: RankingMetricKey;
   onSelect: () => void;
 }) {
+  if (metric === "unitPrice") {
+    return <UnitPriceRankingCard entry={entry} rank={rank} onSelect={onSelect} featured={rank === 1} />;
+  }
+
   const styles =
     rank === 1
       ? "border-yellow-300 bg-yellow-50 shadow-md"
@@ -1097,6 +1135,10 @@ function RankingCard({
   metric: RankingMetricKey;
   onSelect: () => void;
 }) {
+  if (metric === "unitPrice") {
+    return <UnitPriceRankingCard entry={entry} rank={rank} onSelect={onSelect} />;
+  }
+
   const details = subMetrics(entry, metric);
   const isSimple = rank === 4 || rank === 5;
   const isCompact = rank >= 6 && rank <= 10;
@@ -1185,6 +1227,64 @@ function RankingCard({
           {details.join(" / ")}
         </div>
       )}
+    </button>
+  );
+}
+
+function UnitPriceRankingCard({
+  entry,
+  rank,
+  onSelect,
+  featured = false,
+}: {
+  entry: RankingEntry;
+  rank: number;
+  onSelect: () => void;
+  featured?: boolean;
+}) {
+  const offer = entry.offer;
+  const rankLabel = offer?.rank ? `${offer.rank}ランク` : "";
+
+  return (
+    <button
+      type="button"
+      onClick={onSelect}
+      className={`block w-full rounded-2xl border p-4 text-left active:scale-[0.99] ${
+        featured
+          ? "border-yellow-300 bg-yellow-50 shadow-md"
+          : "border-gray-100 bg-white"
+      }`}
+    >
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <div className="flex items-center gap-2">
+            <span className="text-sm font-black text-gray-900">{rank}位</span>
+            {rankLabel && (
+              <span className="rounded-full bg-green-600 px-2 py-0.5 text-[10px] font-bold text-white">
+                {rankLabel}
+              </span>
+            )}
+          </div>
+          <div className="mt-1 text-2xl font-black text-gray-900">
+            {mainMetricValue(entry, "unitPrice")}
+          </div>
+          <div className="mt-1 text-sm font-bold text-green-700">
+            {offer?.service ?? "サービス -"}
+          </div>
+        </div>
+        <div className="shrink-0 text-right text-xs font-bold text-gray-500">
+          {formatOfferAge(offer?.createdAt)}
+        </div>
+      </div>
+
+      <div className="mt-3 rounded-xl bg-white/80 px-3 py-2 text-sm font-bold text-gray-700">
+        報酬 {formatCurrency(entry.total)} / {offer ? `${offer.distanceKm.toLocaleString()}km` : "-"}
+      </div>
+
+      <div className="mt-2 flex min-w-0 items-center justify-between gap-2 text-xs font-bold text-gray-500">
+        <span className="min-w-0 truncate">共有者: {entry.name}</span>
+        {entry.area && <span className="shrink-0 truncate">{entry.area}</span>}
+      </div>
     </button>
   );
 }
