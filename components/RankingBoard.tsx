@@ -1,6 +1,6 @@
 ﻿"use client";
 
-import { useEffect, useMemo, useRef, useState, type TouchEvent } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import AffiliateMiniAd from "@/components/AffiliateMiniAd";
@@ -126,7 +126,7 @@ const rankingMetricOptions: {
   label: string;
   className: string;
 }[] = [
-  { key: "sales", label: "売上詳細", className: "flex-[1.6]" },
+  { key: "sales", label: "売上/詳細", className: "flex-[1.6]" },
   { key: "hourly", label: "時給", className: "flex-1" },
   { key: "deliveries", label: "件数", className: "flex-1" },
   { key: "unitPrice", label: "単価", className: "flex-1" },
@@ -687,7 +687,6 @@ function metricFromQuery(value: string | null): RankingMetricKey {
 export default function RankingBoard() {
   const searchParams = useSearchParams();
   const focusedEntryRef = useRef<HTMLDivElement | null>(null);
-  const swipeStartRef = useRef<{ x: number; y: number } | null>(null);
   const isAdmin = useAdminMode();
   const [records, setRecords] = useState<StoredRecord[]>([]);
   const [realtimeOffers, setRealtimeOffers] = useState<SharedRealtimeOffer[]>([]);
@@ -783,17 +782,6 @@ export default function RankingBoard() {
   const showRankingAd = rankingMetric !== "unitPrice" && rankingEntries.length >= 2;
   const shouldFocusMe = focusMode === "me";
 
-  const switchRankingMetric = (direction: 1 | -1) => {
-    const currentIndex = rankingMetricOptions.findIndex(
-      (item) => item.key === rankingMetric
-    );
-    const nextIndex = currentIndex + direction;
-    const next = rankingMetricOptions[nextIndex];
-    if (!next) return;
-    setRankingMetric(next.key);
-    setShowSalesDetail(false);
-  };
-
   const handleRankingMetricSelect = (key: RankingMetricKey) => {
     if (key === "sales") {
       if (rankingMetric === "sales") {
@@ -807,28 +795,6 @@ export default function RankingBoard() {
 
     setRankingMetric(key);
     setShowSalesDetail(false);
-  };
-
-  const handleRankingTouchStart = (event: TouchEvent<HTMLElement>) => {
-    const touch = event.touches[0];
-    swipeStartRef.current = { x: touch.clientX, y: touch.clientY };
-  };
-
-  const handleRankingTouchEnd = (event: TouchEvent<HTMLElement>) => {
-    const start = swipeStartRef.current;
-    swipeStartRef.current = null;
-    const touch = event.changedTouches[0];
-    if (!start || !touch) return;
-
-    const diffX = touch.clientX - start.x;
-    const diffY = touch.clientY - start.y;
-    if (Math.abs(diffX) < 50 || Math.abs(diffX) <= Math.abs(diffY)) return;
-
-    if (diffX < 0) {
-      switchRankingMetric(1);
-    } else {
-      switchRankingMetric(-1);
-    }
   };
 
   const handleHideEntry = (entry: RankingEntry) => {
@@ -882,9 +848,7 @@ export default function RankingBoard() {
 
       <div className="px-4 pb-80 pt-2">
         <section
-          className="rounded-2xl bg-white p-3 shadow-sm [touch-action:pan-y]"
-          onTouchStart={handleRankingTouchStart}
-          onTouchEnd={handleRankingTouchEnd}
+          className="rounded-2xl bg-white p-3 shadow-sm"
         >
           {rankingEntries.length === 0 ? (
             <div className="space-y-3">
@@ -1089,7 +1053,7 @@ function SalesDetailPanel({
     <div className="rounded-2xl border border-green-100 bg-white p-3 shadow-sm">
       <div className="flex items-center justify-between gap-2">
         <div>
-          <div className="text-sm font-black text-green-900">売上詳細</div>
+          <div className="text-sm font-black text-green-900">売上/詳細</div>
           <div className="text-[11px] font-bold text-green-700">
             会社別売上を横にスライドして確認できます
           </div>
