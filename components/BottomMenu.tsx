@@ -5,7 +5,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { useRef, type TouchEvent } from "react";
 
 const items = [
-  { href: "/", label: "マイページ", icon: "🏠" },
+  { href: "/mypage", label: "マイページ", icon: "🏠" },
   { href: "/record", label: "記録", icon: "📝" },
   { href: "/ranking", label: "ランキング", icon: "🏆" },
   { href: "/realtime", label: "共有", icon: "📡" },
@@ -61,14 +61,9 @@ export default function BottomMenu() {
               key={item.href}
               href={item.href}
               onClick={(event) => {
-                if (item.href === "/" && pathname === "/") {
+                if (item.href === "/mypage" && pathname === "/mypage") {
                   event.preventDefault();
                   window.scrollTo({ top: 0, behavior: "smooth" });
-                  return;
-                }
-                if (item.href === "/" && pathname !== "/") {
-                  event.preventDefault();
-                  router.push("/");
                 }
               }}
               className={`flex min-w-[64px] flex-col items-center justify-center rounded-lg px-1 py-1 text-[10px] leading-none ${

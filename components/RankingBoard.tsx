@@ -134,9 +134,9 @@ const rankingMetricOptions: {
 
 const serviceLabels: { key: ServiceKey; label: string }[] = [
   { key: "uber", label: "Uber" },
+  { key: "rocket", label: "ロケナウ" },
   { key: "demae", label: "出前館" },
   { key: "menu", label: "menu" },
-  { key: "rocket", label: "ロケナウ" },
   { key: "other", label: "Other" },
 ];
 
@@ -219,6 +219,20 @@ function serviceAmount(entry: RankingEntry, serviceKey: ServiceKey) {
     (sum, record) => sum + (record.services?.[serviceKey]?.amount ?? 0),
     0
   );
+}
+
+function maxServiceUnitPrice(entry: RankingEntry) {
+  let maxUnitPrice = 0;
+  for (const record of entry.records) {
+    for (const service of Object.values(record.services ?? {})) {
+      const amount = Math.max(0, service.amount ?? 0);
+      const deliveries = Math.max(0, service.deliveries ?? 0);
+      if (amount > 0 && deliveries > 0) {
+        maxUnitPrice = Math.max(maxUnitPrice, Math.floor(amount / deliveries));
+      }
+    }
+  }
+  return maxUnitPrice || entry.unitPrice;
 }
 
 function calculateHourly(total: number, workMinutes: number, fallbackHourly?: number) {
@@ -900,59 +914,67 @@ export default function RankingBoard() {
                   ? `あなたの順位 ${myRankIndex + 1}位 / ${rankingEntries.length}人中`
                   : "この条件ではまだ順位がありません"}
               </div>
-              {rankingMetric === "sales" && showSalesDetail && (
-                <SalesDetailPanel entries={rankingEntries.slice(0, 10)} />
+              {rankingMetric === "sales" && showSalesDetail ? (
+                <SalesDetailPanel
+                  entries={rankingEntries.slice(0, 50)}
+                  onClose={() => setShowSalesDetail(false)}
+                />
+              ) : (
+                <>
+                  {visibleTop3.map((entry, index) => (
+                    <div
+                      key={entry.key}
+                      ref={shouldFocusMe && entry.isCurrentUser ? focusedEntryRef : null}
+                      className="space-y-3"
+                    >
+                      <PodiumCard
+                        entry={entry}
+                        rank={index + 1}
+                        metric={rankingMetric}
+                        onSelect={() => setSelectedEntry({ entry, rank: index + 1 })}
+                      />
+                      {isAdmin && (
+                        <AdminHideRecordButton onHide={() => handleHideEntry(entry)} />
+                      )}
+                      {index === 0 && showRankingAd && (
+                        <AffiliateMiniAd
+                          placement={`ranking-${period}-${regionFilter}-${rankingMetric}`}
+                          slot={0}
+                          driverWeight={0.6}
+                        />
+                      )}
+                    </div>
+                  ))}
+                  {visibleOthers.map((entry, index) => (
+                    <div
+                      key={entry.key}
+                      ref={shouldFocusMe && entry.isCurrentUser ? focusedEntryRef : null}
+                    >
+                      <RankingCard
+                        entry={entry}
+                        rank={index + 4}
+                        metric={rankingMetric}
+                        onSelect={() => setSelectedEntry({ entry, rank: index + 4 })}
+                      />
+                      {isAdmin && (
+                        <AdminHideRecordButton onHide={() => handleHideEntry(entry)} />
+                      )}
+                    </div>
+                  ))}
+                  {visibleRankingEntries.length < rankingEntries.length && (
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setVisibleCount((current) => current + RANKING_PAGE_SIZE)
+                      }
+                      className="w-full rounded-2xl border border-green-100 bg-green-50 px-4 py-3 text-sm font-black text-green-700 active:bg-green-100"
+                    >
+                      もっと見る
+                    </button>
+                  )}
+                  {rankingMetric === "unitPrice" && PARTICIPATE_UNIT_PRICE_LINK}
+                </>
               )}
-              {visibleTop3.map((entry, index) => (
-                <div
-                  key={entry.key}
-                  ref={shouldFocusMe && entry.isCurrentUser ? focusedEntryRef : null}
-                  className="space-y-3"
-                >
-                  <PodiumCard
-                    entry={entry}
-                    rank={index + 1}
-                    metric={rankingMetric}
-                    onSelect={() => setSelectedEntry({ entry, rank: index + 1 })}
-                  />
-                  {isAdmin && (
-                    <AdminHideRecordButton onHide={() => handleHideEntry(entry)} />
-                  )}
-                  {index === 0 && showRankingAd && (
-                    <AffiliateMiniAd
-                      placement={`ranking-${period}-${regionFilter}-${rankingMetric}`}
-                      slot={0}
-                      driverWeight={0.6}
-                    />
-                  )}
-                </div>
-              ))}
-              {visibleOthers.map((entry, index) => (
-                <div
-                  key={entry.key}
-                  ref={shouldFocusMe && entry.isCurrentUser ? focusedEntryRef : null}
-                >
-                  <RankingCard
-                    entry={entry}
-                    rank={index + 4}
-                    metric={rankingMetric}
-                    onSelect={() => setSelectedEntry({ entry, rank: index + 4 })}
-                  />
-                  {isAdmin && (
-                    <AdminHideRecordButton onHide={() => handleHideEntry(entry)} />
-                  )}
-                </div>
-              ))}
-              {visibleRankingEntries.length < rankingEntries.length && (
-                <button
-                  type="button"
-                  onClick={() => setVisibleCount((current) => current + RANKING_PAGE_SIZE)}
-                  className="w-full rounded-2xl border border-green-100 bg-green-50 px-4 py-3 text-sm font-black text-green-700 active:bg-green-100"
-                >
-                  もっと見る
-                </button>
-              )}
-              {rankingMetric === "unitPrice" && PARTICIPATE_UNIT_PRICE_LINK}
             </div>
           )}
         </section>
@@ -1056,61 +1078,109 @@ export default function RankingBoard() {
   );
 }
 
-function SalesDetailPanel({ entries }: { entries: RankingEntry[] }) {
+function SalesDetailPanel({
+  entries,
+  onClose,
+}: {
+  entries: RankingEntry[];
+  onClose: () => void;
+}) {
   return (
-    <div className="space-y-2 rounded-2xl border border-green-100 bg-green-50/70 p-3">
+    <div className="rounded-2xl border border-green-100 bg-white p-3 shadow-sm">
       <div className="flex items-center justify-between gap-2">
         <div>
-          <div className="text-sm font-black text-green-900">売上のサービス別内訳</div>
+          <div className="text-sm font-black text-green-900">売上詳細</div>
           <div className="text-[11px] font-bold text-green-700">
-            上位10名まで表示しています
+            会社別売上を横にスライドして確認できます
           </div>
         </div>
-        <div className="shrink-0 rounded-full bg-white px-2 py-1 text-[10px] font-black text-green-700 ring-1 ring-green-100">
-          内訳
-        </div>
+        <button
+          type="button"
+          onClick={onClose}
+          className="shrink-0 rounded-full bg-gray-100 px-3 py-1.5 text-[11px] font-black text-gray-600 active:bg-gray-200"
+        >
+          閉じる
+        </button>
       </div>
 
-      <div className="space-y-2">
-        {entries.map((entry, index) => (
-          <div
-            key={entry.key}
-            className="rounded-xl border border-green-100 bg-white px-3 py-3"
-          >
-            <div className="flex items-start justify-between gap-2">
-              <div className="min-w-0">
-                <div className="text-xs font-black text-green-700">
-                  {index + 1}位
-                </div>
-                <div className="truncate text-sm font-black text-gray-900">
-                  {entry.name}
-                </div>
-              </div>
-              <div className="shrink-0 text-right">
-                <div className="text-[10px] font-bold text-gray-500">合計</div>
-                <div className="text-sm font-black text-gray-900">
-                  {formatCurrency(entry.total)}
-                </div>
-              </div>
-            </div>
-
-            <div className="mt-2 grid grid-cols-2 gap-1.5">
+      <div className="mt-3 overflow-x-auto rounded-xl border border-gray-100">
+        <table className="min-w-[980px] border-collapse bg-white text-[11px]">
+          <thead className="sticky top-0 z-10 bg-gray-100 text-gray-600">
+            <tr>
+              <th className="w-12 border-b border-gray-200 px-2 py-2 text-left font-black">
+                順位
+              </th>
+              <th className="w-28 border-b border-gray-200 px-2 py-2 text-left font-black">
+                名前
+              </th>
+              <th className="w-24 border-b border-gray-200 px-2 py-2 text-right font-black">
+                売上
+              </th>
               {serviceLabels.map((service) => (
-                <div
+                <th
                   key={service.key}
-                  className="min-w-0 rounded-lg bg-gray-50 px-2 py-1.5"
+                  className="w-24 border-b border-gray-200 px-2 py-2 text-right font-black"
                 >
-                  <div className="truncate text-[10px] font-bold text-gray-500">
-                    {service.label}
-                  </div>
-                  <div className="text-xs font-black text-gray-900">
-                    {formatCurrency(serviceAmount(entry, service.key))}
-                  </div>
-                </div>
+                  {service.label}
+                </th>
               ))}
-            </div>
-          </div>
-        ))}
+              <th className="w-20 border-b border-gray-200 px-2 py-2 text-right font-black">
+                稼働時間
+              </th>
+              <th className="w-20 border-b border-gray-200 px-2 py-2 text-right font-black">
+                時給
+              </th>
+              <th className="w-16 border-b border-gray-200 px-2 py-2 text-right font-black">
+                件数
+              </th>
+              <th className="w-24 border-b border-gray-200 px-2 py-2 text-right font-black">
+                最大単価
+              </th>
+            </tr>
+          </thead>
+          <tbody>
+            {entries.map((entry, index) => (
+              <tr
+                key={entry.key}
+                className={entry.isCurrentUser ? "bg-green-50" : "odd:bg-white even:bg-gray-50"}
+              >
+                <td className="border-b border-gray-100 px-2 py-2 font-black text-green-700">
+                  {index + 1}位
+                </td>
+                <td className="border-b border-gray-100 px-2 py-2 font-black text-gray-900">
+                  <span className="block max-w-[104px] truncate">{entry.name}</span>
+                </td>
+                <td className="border-b border-gray-100 px-2 py-2 text-right font-black text-gray-900">
+                  {formatCurrency(entry.total)}
+                </td>
+                {serviceLabels.map((service) => (
+                  <td
+                    key={service.key}
+                    className="border-b border-gray-100 px-2 py-2 text-right font-bold text-gray-700"
+                  >
+                    {formatCurrency(serviceAmount(entry, service.key))}
+                  </td>
+                ))}
+                <td className="border-b border-gray-100 px-2 py-2 text-right font-bold text-gray-700">
+                  {formatMinutes(entry.workMinutes)}
+                </td>
+                <td className="border-b border-gray-100 px-2 py-2 text-right font-bold text-gray-700">
+                  {formatHourly(entry.hourly)}
+                </td>
+                <td className="border-b border-gray-100 px-2 py-2 text-right font-bold text-gray-700">
+                  {entry.deliveries.toLocaleString()}件
+                </td>
+                <td className="border-b border-gray-100 px-2 py-2 text-right font-bold text-gray-700">
+                  {formatUnitPrice(maxServiceUnitPrice(entry))}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+
+      <div className="mt-2 text-[11px] font-bold text-gray-500">
+        表の中だけ横にスライドできます
       </div>
     </div>
   );
