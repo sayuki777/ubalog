@@ -3,18 +3,8 @@
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import GoalDashboard from "@/components/GoalDashboard";
-import PerformanceComparePanel from "@/components/PerformanceComparePanel";
 import RocketNowStatsCard from "@/components/RocketNowStatsCard";
-import {
-  getHighlightUpdate,
-  hasHighlight,
-  type HighlightUpdate,
-} from "@/lib/highlights";
 import { isHolidayOrWeekend } from "@/lib/japaneseHolidays";
-import {
-  formatPerformanceValue,
-  getFixedPerformanceStats,
-} from "@/lib/performance";
 import type { UbalogStoredRecord } from "@/lib/records";
 import {
   ensureActiveUserFromProfile,
@@ -46,7 +36,9 @@ type StoredRecord = {
   total: number;
   hourly: number;
   workMinutes: number;
-  services: Record<ServiceKey, { amount: number; deliveries: number }>;
+  services?: Partial<Record<ServiceKey, { amount?: number; deliveries?: number }>>;
+  hidden?: boolean;
+  updatedAt?: string;
 };
 
 type CalendarCell = {
@@ -77,26 +69,43 @@ function formatDate(iso: string) {
   return iso.replaceAll("-", "/");
 }
 
+function shortDate(iso: string) {
+  const [, month, day] = iso.split("-");
+  return `${Number(month)}/${Number(day)}`;
+}
+
 function formatCurrency(amount: number) {
-  return `￥${amount.toLocaleString()}`;
+  return `¥${Math.max(0, Math.floor(amount)).toLocaleString()}`;
 }
 
 function formatCalendarAmount(amount: number) {
   if (amount >= 100000) return "10万+";
-  return amount.toLocaleString();
+  return Math.floor(amount).toLocaleString();
 }
 
 function formatMinutes(minutes: number) {
-  const h = Math.floor(minutes / 60);
-  const m = minutes % 60;
+  const safeMinutes = Math.max(0, Math.floor(minutes));
+  const h = Math.floor(safeMinutes / 60);
+  const m = safeMinutes % 60;
   return `${h}:${String(m).padStart(2, "0")}`;
 }
 
+function safeNumber(value: unknown) {
+  const numberValue = Number(value);
+  return Number.isFinite(numberValue) && numberValue > 0 ? numberValue : 0;
+}
+
+function safeServiceAmount(record: StoredRecord, key: ServiceKey) {
+  return safeNumber(record.services?.[key]?.amount);
+}
+
+function safeServiceDeliveries(record: StoredRecord, key: ServiceKey) {
+  return safeNumber(record.services?.[key]?.deliveries);
+}
+
 function totalDeliveries(record: StoredRecord) {
-  return Object.values(record.services).reduce(
-    (sum, service) => sum + service.deliveries,
-    0
-  );
+  const keys: ServiceKey[] = ["uber", "demae", "menu", "rocket", "other"];
+  return keys.reduce((sum, key) => sum + safeServiceDeliveries(record, key), 0);
 }
 
 function buildCalendarDays(baseDate: Date): CalendarCell[] {
@@ -156,25 +165,85 @@ function nextMonthDate(base: Date, diff: number) {
 
 function monthRange(base: Date, diffMonths: number) {
   const target = new Date(base.getFullYear(), base.getMonth() + diffMonths, 1);
-  const key = monthKey(target);
   return {
-    key,
-    label:
-      diffMonths === 0 ? "今月" : diffMonths === -1 ? "前月" : "前々月",
+    key: monthKey(target),
+    label: diffMonths === 0 ? "今月" : diffMonths === -1 ? "前月" : "前々月",
   };
+}
+
+function previousMonthKeyFrom(base: Date) {
+  return monthKey(new Date(base.getFullYear(), base.getMonth() - 1, 1));
+}
+
+function dedupeRecords(records: StoredRecord[]) {
+  const map = new Map<string, StoredRecord>();
+
+  for (const record of records) {
+    if (record.hidden === true) continue;
+    const current = map.get(record.date);
+    if (!current) {
+      map.set(record.date, record);
+      continue;
+    }
+
+    const currentTime = new Date(current.updatedAt ?? "").getTime();
+    const nextTime = new Date(record.updatedAt ?? "").getTime();
+    if (
+      nextTime > currentTime ||
+      (nextTime === currentTime && safeNumber(record.total) > safeNumber(current.total))
+    ) {
+      map.set(record.date, record);
+    }
+  }
+
+  return [...map.values()];
 }
 
 function monthSales(records: StoredRecord[], key: string) {
   return records
-    .filter((record) => record.date.startsWith(key))
-    .reduce((sum, record) => sum + (record.total || 0), 0);
+    .filter((record) => record.hidden !== true && record.date.startsWith(key))
+    .reduce((sum, record) => sum + safeNumber(record.total), 0);
+}
+
+function serviceSales(records: StoredRecord[]) {
+  const items: { key: ServiceKey; label: string; amount: number }[] = [
+    { key: "uber", label: "Uber", amount: 0 },
+    { key: "demae", label: "出前館", amount: 0 },
+    { key: "rocket", label: "ロケナウ", amount: 0 },
+    { key: "menu", label: "menu", amount: 0 },
+    { key: "other", label: "その他", amount: 0 },
+  ];
+
+  return items
+    .map((item) => ({
+      ...item,
+      amount: records.reduce((sum, record) => sum + safeServiceAmount(record, item.key), 0),
+    }))
+    .sort((a, b) => b.amount - a.amount);
+}
+
+function compareText(current: number, previous: number) {
+  const diff = current - previous;
+  if (previous <= 0) {
+    return {
+      main: "前月比 -",
+      sub: current > 0 ? `前月より +${formatCurrency(diff)}` : "前月データなし",
+      positive: current > 0,
+    };
+  }
+
+  const percent = Math.round((diff / previous) * 100);
+  return {
+    main: `前月比 ${percent >= 0 ? "+" : ""}${percent}%`,
+    sub: `${diff >= 0 ? "前月より +" : "前月より -"}${formatCurrency(Math.abs(diff))}`,
+    positive: diff >= 0,
+  };
 }
 
 export default function PersonalDashboard() {
   const [records, setRecords] = useState<StoredRecord[]>([]);
   const [activeUser, setActiveUser] = useState<UbalogUser | null>(null);
   const [displayName, setDisplayName] = useState("");
-  const [highlight, setHighlight] = useState<HighlightUpdate | null>(null);
   const [currentMonth, setCurrentMonth] = useState(() => new Date());
   const [selectedDate, setSelectedDate] = useState(todayIsoDate());
   const [activeTab, setActiveTab] = useState<"score" | "goal">("score");
@@ -188,29 +257,36 @@ export default function PersonalDashboard() {
       setDisplayName(getDisplayNameFromProfileOrUser(profile, user));
       const localRecords = loadRecords();
       setRecords(localRecords);
-      void fetchSharedRecords().then((remoteRecords) => {
-        if (remoteRecords.length === 0) return;
-        setRecords(mergeRecords(localRecords, remoteRecords) as StoredRecord[]);
-      });
-      setHighlight(getHighlightUpdate());
+      void fetchSharedRecords()
+        .then((remoteRecords) => {
+          if (remoteRecords.length === 0) return;
+          const merged = mergeRecords(
+            localRecords as unknown as Parameters<typeof mergeRecords>[0],
+            remoteRecords
+          );
+          setRecords(merged as StoredRecord[]);
+        })
+        .catch(() => {
+          setRecords(localRecords);
+        });
     };
 
     const timer = window.setTimeout(load, 0);
     window.addEventListener("focus", load);
     window.addEventListener("ubalog-profile-updated", load);
-    window.addEventListener("ubalog-highlight-updated", load);
 
     return () => {
       window.clearTimeout(timer);
       window.removeEventListener("focus", load);
       window.removeEventListener("ubalog-profile-updated", load);
-      window.removeEventListener("ubalog-highlight-updated", load);
     };
   }, []);
 
   const personalRecords = useMemo(() => {
-    if (!activeUser) return [];
-    return records.filter((record) => recordBelongsToUser(record, activeUser));
+    const ownRecords = activeUser
+      ? records.filter((record) => recordBelongsToUser(record, activeUser))
+      : [];
+    return dedupeRecords(ownRecords);
   }, [activeUser, records]);
 
   const monthPrefix = monthKey(currentMonth);
@@ -230,23 +306,26 @@ export default function PersonalDashboard() {
 
   const calendarDays = useMemo(() => buildCalendarDays(currentMonth), [currentMonth]);
   const selectedRecord = monthMap.get(selectedDate) ?? null;
-  const fixedStats = useMemo(
-    () => getFixedPerformanceStats(personalRecords),
-    [personalRecords]
-  );
-  const bestRecord = [...monthRecords].sort((a, b) => b.total - a.total)[0] ?? null;
-  const best3 = [...monthRecords].sort((a, b) => b.total - a.total).slice(0, 3);
+  const bestRecord = [...monthRecords].sort((a, b) => safeNumber(b.total) - safeNumber(a.total))[0] ?? null;
   const monthlySales = useMemo(
     () =>
       [0, -1, -2].map((diff) => {
-        const range = monthRange(new Date(), diff);
+        const range = monthRange(currentMonth, diff);
         return {
           label: range.label,
           amount: monthSales(personalRecords, range.key),
         };
       }),
-    [personalRecords]
+    [currentMonth, personalRecords]
   );
+  const monthTotal = monthSales(personalRecords, monthPrefix);
+  const previousMonthTotal = monthSales(personalRecords, previousMonthKeyFrom(currentMonth));
+  const monthCompare = compareText(monthTotal, previousMonthTotal);
+  const activeDays = monthRecords.filter(
+    (record) => safeNumber(record.total) > 0 || safeNumber(record.workMinutes) > 0
+  ).length;
+  const dailyAverage = activeDays > 0 ? Math.floor(monthTotal / activeDays) : 0;
+  const services = serviceSales(monthRecords);
 
   const changeMonth = (diff: number) => {
     const next = nextMonthDate(currentMonth, diff);
@@ -262,9 +341,7 @@ export default function PersonalDashboard() {
             type="button"
             onClick={() => setActiveTab("score")}
             className={`h-9 rounded-xl text-sm font-bold ${
-              activeTab === "score"
-                ? "bg-green-600 text-white shadow-sm"
-                : "text-gray-600"
+              activeTab === "score" ? "bg-green-600 text-white shadow-sm" : "text-gray-600"
             }`}
           >
             個人成績
@@ -273,9 +350,7 @@ export default function PersonalDashboard() {
             type="button"
             onClick={() => setActiveTab("goal")}
             className={`h-9 rounded-xl text-sm font-bold ${
-              activeTab === "goal"
-                ? "bg-green-600 text-white shadow-sm"
-                : "text-gray-600"
+              activeTab === "goal" ? "bg-green-600 text-white shadow-sm" : "text-gray-600"
             }`}
           >
             目標
@@ -285,59 +360,25 @@ export default function PersonalDashboard() {
 
       {activeTab === "score" ? (
         <>
-          <section className="rounded-2xl bg-white p-4 shadow-sm">
-            <div className="grid grid-cols-2 gap-2">
-              {fixedStats.map((stat, index) =>
-                stat.label ? (
-                  <StatCard
-                    key={stat.label}
-                    title={stat.label}
-                    value={formatPerformanceValue(stat.value, stat.format)}
-                    highlight={
-                      (stat.label === "今日" && hasHighlight("today", highlight)) ||
-                      (stat.label === "昨日" && hasHighlight("yesterday", highlight)) ||
-                      (stat.label === "今週" && hasHighlight("thisWeek", highlight)) ||
-                      (stat.label === "先週" && hasHighlight("lastWeek", highlight)) ||
-                      (stat.label === "月間最高売上" && hasHighlight("monthlyBest", highlight)) ||
-                      (stat.label === "最高単価" && hasHighlight("bestUnitPrice", highlight))
-                    }
-                  />
-                ) : (
-                  <div key={`empty-${index}`} />
-                )
-              )}
-            </div>
+          <MonthSummaryCard
+            currentMonth={currentMonth}
+            total={monthTotal}
+            activeDays={activeDays}
+            dailyAverage={dailyAverage}
+            onChangeMonth={changeMonth}
+          />
 
-            {bestRecord && (
-              <div className="mt-3 rounded-xl bg-green-50 px-3 py-2 text-xs font-bold text-green-700">
-                月間最高売上: {formatDate(bestRecord.date)} /{" "}
-                {formatCurrency(bestRecord.total)}
-              </div>
-            )}
+          {personalRecords.length === 0 && <EmptyPerformanceCard />}
 
-            {best3.length > 0 && (
-              <div className="mt-4 rounded-2xl bg-green-50 p-3">
-                <div className="text-sm font-bold text-green-800">今月ベスト日</div>
-                <div className="mt-2 space-y-2">
-                  {best3.map((record, index) => (
-                    <div
-                      key={record.date}
-                      className="flex items-center justify-between rounded-xl bg-white px-3 py-2 text-sm"
-                    >
-                      <div className="font-bold text-gray-800">
-                        {index + 1}位 {formatDate(record.date)}
-                      </div>
-                      <div className="font-bold text-green-700">
-                        {formatCurrency(record.total)}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-          </section>
+          <MonthCompareCard
+            previousTotal={previousMonthTotal}
+            main={monthCompare.main}
+            sub={monthCompare.sub}
+            positive={monthCompare.positive}
+          />
 
-          <PerformanceComparePanel records={personalRecords} />
+          <BestDayCard record={bestRecord} />
+          <ServiceSalesCard services={services} monthTotal={monthTotal} />
 
           <section className="rounded-2xl bg-white p-4 shadow-sm">
             <div className="mb-3 flex items-center justify-between">
@@ -411,7 +452,7 @@ export default function PersonalDashboard() {
                       {cell.day}
                     </span>
                     <span className="mt-auto w-full text-center text-[9px] font-black leading-tight text-green-700">
-                      {record ? formatCalendarAmount(record.total) : ""}
+                      {record ? formatCalendarAmount(safeNumber(record.total)) : ""}
                     </span>
                   </button>
                 );
@@ -427,7 +468,7 @@ export default function PersonalDashboard() {
         </>
       ) : (
         <GoalDashboard
-          records={personalRecords}
+          records={personalRecords as UbalogStoredRecord[]}
           currentMonth={currentMonth}
           onChangeMonth={changeMonth}
           displayName={displayName}
@@ -437,29 +478,172 @@ export default function PersonalDashboard() {
   );
 }
 
-function NewBadge() {
+function MonthSummaryCard({
+  currentMonth,
+  total,
+  activeDays,
+  dailyAverage,
+  onChangeMonth,
+}: {
+  currentMonth: Date;
+  total: number;
+  activeDays: number;
+  dailyAverage: number;
+  onChangeMonth: (diff: number) => void;
+}) {
   return (
-    <span className="rounded-full bg-pink-100 px-1.5 py-0.5 text-[9px] font-black text-pink-600">
-      NEW!
-    </span>
+    <section className="rounded-2xl bg-white p-4 shadow-sm">
+      <div className="mb-3 flex items-center justify-between">
+        <button
+          type="button"
+          onClick={() => onChangeMonth(-1)}
+          className="flex h-9 w-9 items-center justify-center rounded-full border border-green-200 text-lg font-bold text-green-700"
+          aria-label="前月"
+        >
+          ‹
+        </button>
+        <div className="text-sm font-black text-gray-900">{formatMonthLabel(currentMonth)}</div>
+        <button
+          type="button"
+          onClick={() => onChangeMonth(1)}
+          className="flex h-9 w-9 items-center justify-center rounded-full border border-green-200 text-lg font-bold text-green-700"
+          aria-label="次月"
+        >
+          ›
+        </button>
+      </div>
+
+      <div className="rounded-2xl bg-green-50 px-3 py-3">
+        <div className="text-xs font-bold text-green-700">今月の売上</div>
+        <div className="mt-1 text-3xl font-black leading-tight text-gray-950">
+          {formatCurrency(total)}
+        </div>
+      </div>
+
+      <div className="mt-3 grid grid-cols-2 gap-2">
+        <MiniInfo label="稼働日数" value={`${activeDays.toLocaleString()}日`} />
+        <MiniInfo label="日給平均" value={activeDays > 0 ? formatCurrency(dailyAverage) : "¥0"} />
+      </div>
+    </section>
   );
 }
 
-function StatCard({
-  title,
-  value,
-  highlight,
+function EmptyPerformanceCard() {
+  return (
+    <section className="rounded-2xl bg-white p-4 text-center shadow-sm">
+      <div className="text-sm font-black text-gray-900">まだ記録がありません</div>
+      <div className="mt-1 text-xs font-bold leading-5 text-gray-500">
+        今日の売上を記録して、成績を見てみましょう。
+      </div>
+      <Link
+        href="/record"
+        className="mt-3 inline-flex h-10 items-center justify-center rounded-xl bg-green-600 px-4 text-sm font-black text-white"
+      >
+        記録する
+      </Link>
+    </section>
+  );
+}
+
+function MonthCompareCard({
+  previousTotal,
+  main,
+  sub,
+  positive,
 }: {
-  title: string;
-  value: string;
-  highlight?: boolean;
+  previousTotal: number;
+  main: string;
+  sub: string;
+  positive: boolean;
 }) {
   return (
-    <div className="min-w-0 rounded-2xl bg-gray-50 px-3 py-3">
-      <div className="flex min-h-5 items-center justify-between gap-2">
-        <div className="truncate text-xs font-bold text-gray-500">{title}</div>
-        {highlight && <NewBadge />}
+    <section className="rounded-2xl bg-white p-4 shadow-sm">
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <div className="text-sm font-black text-gray-900">前月比</div>
+          <div className="mt-1 text-xs font-bold text-gray-500">
+            前月の売上 {formatCurrency(previousTotal)}
+          </div>
+        </div>
+        <div
+          className={`rounded-full px-3 py-1.5 text-xs font-black ${
+            positive ? "bg-green-50 text-green-700" : "bg-gray-100 text-gray-600"
+          }`}
+        >
+          {main}
+        </div>
       </div>
+      <div className="mt-3 rounded-xl bg-gray-50 px-3 py-2 text-sm font-bold text-gray-700">
+        {sub}
+      </div>
+    </section>
+  );
+}
+
+function BestDayCard({ record }: { record: StoredRecord | null }) {
+  return (
+    <section className="rounded-2xl bg-white p-4 shadow-sm">
+      <div className="text-sm font-black text-gray-900">今月の最高日</div>
+      {record ? (
+        <div className="mt-3 flex items-center justify-between rounded-2xl bg-amber-50 px-3 py-3">
+          <div>
+            <div className="text-lg font-black text-gray-950">{shortDate(record.date)}</div>
+            <div className="mt-1 text-xs font-bold text-amber-700">
+              {totalDeliveries(record).toLocaleString()}件
+            </div>
+          </div>
+          <div className="text-xl font-black text-gray-950">{formatCurrency(safeNumber(record.total))}</div>
+        </div>
+      ) : (
+        <div className="mt-3 rounded-xl bg-gray-50 px-3 py-3 text-xs font-bold text-gray-500">
+          まだ記録がありません
+        </div>
+      )}
+    </section>
+  );
+}
+
+function ServiceSalesCard({
+  services,
+  monthTotal,
+}: {
+  services: { key: ServiceKey; label: string; amount: number }[];
+  monthTotal: number;
+}) {
+  const maxAmount = Math.max(...services.map((service) => service.amount), 1);
+
+  return (
+    <section className="rounded-2xl bg-white p-4 shadow-sm">
+      <div className="text-sm font-black text-gray-900">サービス別売上</div>
+      <div className="mt-3 space-y-2">
+        {services.map((service) => (
+          <div key={service.key} className="min-w-0">
+            <div className="flex items-center justify-between gap-3 text-xs font-bold">
+              <span className="text-gray-600">{service.label}</span>
+              <span className={service.amount > 0 ? "text-gray-900" : "text-gray-400"}>
+                {formatCurrency(service.amount)}
+              </span>
+            </div>
+            <div className="mt-1 h-2 overflow-hidden rounded-full bg-gray-100">
+              <div
+                className="h-full rounded-full bg-green-500"
+                style={{ width: `${Math.round((service.amount / maxAmount) * 100)}%` }}
+              />
+            </div>
+          </div>
+        ))}
+      </div>
+      <div className="mt-3 text-right text-[11px] font-bold text-gray-400">
+        合計 {formatCurrency(monthTotal)}
+      </div>
+    </section>
+  );
+}
+
+function MiniInfo({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="min-w-0 rounded-2xl bg-gray-50 px-3 py-3">
+      <div className="truncate text-xs font-bold text-gray-500">{label}</div>
       <div className="mt-1 break-words text-lg font-black leading-tight text-gray-900">
         {value}
       </div>
@@ -496,18 +680,18 @@ function DayDetailCard({
       {record ? (
         <>
           <div className="mt-3 grid grid-cols-2 gap-2 text-xs font-bold text-gray-600">
-            <DetailItem label="合計売上" value={formatCurrency(record.total)} />
-            <DetailItem label="時給" value={formatCurrency(record.hourly)} />
-            <DetailItem label="稼働時間" value={formatMinutes(record.workMinutes)} />
-            <DetailItem label="件数" value={`${totalDeliveries(record)}件`} />
+            <DetailItem label="合計売上" value={formatCurrency(safeNumber(record.total))} />
+            <DetailItem label="時給" value={formatCurrency(safeNumber(record.hourly))} />
+            <DetailItem label="稼働時間" value={formatMinutes(safeNumber(record.workMinutes))} />
+            <DetailItem label="件数" value={`${totalDeliveries(record).toLocaleString()}件`} />
           </div>
 
           <div className="mt-3 grid grid-cols-2 gap-2 text-xs font-bold text-gray-600">
-            <DetailItem label="Uber" value={formatCurrency(record.services.uber.amount)} />
-            <DetailItem label="出前館" value={formatCurrency(record.services.demae.amount)} />
-            <DetailItem label="menu" value={formatCurrency(record.services.menu.amount)} />
-            <DetailItem label="Rocket" value={formatCurrency(record.services.rocket.amount)} />
-            <DetailItem label="その他" value={formatCurrency(record.services.other.amount)} />
+            <DetailItem label="Uber" value={formatCurrency(safeServiceAmount(record, "uber"))} />
+            <DetailItem label="出前館" value={formatCurrency(safeServiceAmount(record, "demae"))} />
+            <DetailItem label="menu" value={formatCurrency(safeServiceAmount(record, "menu"))} />
+            <DetailItem label="ロケナウ" value={formatCurrency(safeServiceAmount(record, "rocket"))} />
+            <DetailItem label="その他" value={formatCurrency(safeServiceAmount(record, "other"))} />
           </div>
 
           {record.comment?.trim() && (
@@ -518,7 +702,7 @@ function DayDetailCard({
         </>
       ) : (
         <div className="mt-3 rounded-xl bg-white px-3 py-3 text-xs font-bold text-gray-600">
-          日付を選んだ状態で記録画面を開けます
+          日付を選んだ状態で記録画面を開きます
         </div>
       )}
     </div>
@@ -543,78 +727,38 @@ function MonthlyTable({
 }) {
   return (
     <section className="rounded-2xl bg-white p-4 shadow-sm">
-      <div className="text-lg font-bold text-gray-900">月間テーブル</div>
+      <div className="text-lg font-bold text-gray-900">月間売上メモ</div>
       {records.length === 0 ? (
         <div className="mt-3 rounded-xl bg-gray-50 px-4 py-8 text-center text-sm text-gray-500">
           この月の記録はありません
         </div>
       ) : (
-        <div className="mt-3 overflow-x-auto">
-          <table className="min-w-[1040px] text-sm">
-            <thead>
-              <tr className="border-b text-left text-xs text-gray-500">
-                <th className="px-2 py-2">日付</th>
-                <th className="px-2 py-2 text-right">合計</th>
-                <th className="px-2 py-2 text-right">時給</th>
-                <th className="px-2 py-2 text-right">稼働</th>
-                <th className="px-2 py-2 text-right">Uber</th>
-                <th className="px-2 py-2 text-right">出前館</th>
-                <th className="px-2 py-2 text-right">menu</th>
-                <th className="px-2 py-2 text-right">Rocket</th>
-                <th className="px-2 py-2 text-right">その他</th>
-                <th className="px-2 py-2">コメント</th>
-              </tr>
-            </thead>
-            <tbody>
-              {records.map((record) => (
-                <tr
-                  key={record.date}
-                  className="cursor-pointer border-b last:border-b-0 hover:bg-green-50"
-                  onClick={() => onSelectDate(record.date)}
-                >
-                  <td className="whitespace-nowrap px-2 py-3">
-                    <button
-                      type="button"
-                      onClick={(event) => {
-                        event.stopPropagation();
-                        onSelectDate(record.date);
-                      }}
-                      className="font-bold text-green-700 underline-offset-2"
-                    >
-                      {formatDate(record.date)}
-                    </button>
-                  </td>
-                  <td className="whitespace-nowrap px-2 py-3 text-right font-bold">
-                    {formatCurrency(record.total)}
-                  </td>
-                  <td className="whitespace-nowrap px-2 py-3 text-right">
-                    {formatCurrency(record.hourly)}
-                  </td>
-                  <td className="whitespace-nowrap px-2 py-3 text-right">
-                    {formatMinutes(record.workMinutes)}
-                  </td>
-                  <td className="whitespace-nowrap px-2 py-3 text-right">
-                    {formatCurrency(record.services.uber.amount)}
-                  </td>
-                  <td className="whitespace-nowrap px-2 py-3 text-right">
-                    {formatCurrency(record.services.demae.amount)}
-                  </td>
-                  <td className="whitespace-nowrap px-2 py-3 text-right">
-                    {formatCurrency(record.services.menu.amount)}
-                  </td>
-                  <td className="whitespace-nowrap px-2 py-3 text-right">
-                    {formatCurrency(record.services.rocket.amount)}
-                  </td>
-                  <td className="whitespace-nowrap px-2 py-3 text-right">
-                    {formatCurrency(record.services.other.amount)}
-                  </td>
-                  <td className="max-w-[180px] truncate px-2 py-3">
-                    {record.comment?.trim() || ""}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+        <div className="mt-3 space-y-2">
+          {records.map((record) => (
+            <button
+              key={record.date}
+              type="button"
+              onClick={() => onSelectDate(record.date)}
+              className="w-full rounded-2xl border border-gray-100 bg-gray-50 px-3 py-3 text-left active:bg-green-50"
+            >
+              <div className="flex items-center justify-between gap-3">
+                <div className="min-w-0">
+                  <div className="text-sm font-black text-gray-900">{shortDate(record.date)}</div>
+                  <div className="mt-1 text-xs font-bold text-gray-500">
+                    {totalDeliveries(record).toLocaleString()}件 / 稼働 {formatMinutes(safeNumber(record.workMinutes))}
+                  </div>
+                </div>
+                <div className="shrink-0 text-right">
+                  <div className="text-base font-black text-gray-950">
+                    {formatCurrency(safeNumber(record.total))}
+                  </div>
+                  <div className="mt-1 text-[11px] font-bold text-gray-500">
+                    時給 {formatCurrency(safeNumber(record.hourly))}
+                  </div>
+                </div>
+              </div>
+            </button>
+          ))}
         </div>
       )}
     </section>

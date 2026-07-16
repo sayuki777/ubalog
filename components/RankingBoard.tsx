@@ -126,10 +126,18 @@ const rankingMetricOptions: {
   label: string;
   className: string;
 }[] = [
-  { key: "sales", label: "売上", className: "flex-[2]" },
+  { key: "sales", label: "売上詳細", className: "flex-[1.6]" },
   { key: "hourly", label: "時給", className: "flex-1" },
   { key: "deliveries", label: "件数", className: "flex-1" },
   { key: "unitPrice", label: "単価", className: "flex-1" },
+];
+
+const serviceLabels: { key: ServiceKey; label: string }[] = [
+  { key: "uber", label: "Uber" },
+  { key: "demae", label: "出前館" },
+  { key: "menu", label: "menu" },
+  { key: "rocket", label: "ロケナウ" },
+  { key: "other", label: "Other" },
 ];
 
 function toIsoDate(date: Date) {
@@ -202,6 +210,13 @@ function formatOfferAge(createdAt?: string) {
 function totalDeliveries(record: StoredRecord) {
   return Object.values(record.services ?? {}).reduce(
     (sum, service) => sum + service.deliveries,
+    0
+  );
+}
+
+function serviceAmount(entry: RankingEntry, serviceKey: ServiceKey) {
+  return entry.records.reduce(
+    (sum, record) => sum + (record.services?.[serviceKey]?.amount ?? 0),
     0
   );
 }
@@ -671,6 +686,7 @@ export default function RankingBoard() {
   const [rankingMetric, setRankingMetric] = useState<RankingMetricKey>(() =>
     metricFromQuery(searchParams.get("tab"))
   );
+  const [showSalesDetail, setShowSalesDetail] = useState(false);
   const [prefectureFilter, setPrefectureFilter] = useState("");
   const [calendarDate, setCalendarDate] = useState(() =>
     dateFromQuery(searchParams.get("date"))
@@ -761,6 +777,22 @@ export default function RankingBoard() {
     const next = rankingMetricOptions[nextIndex];
     if (!next) return;
     setRankingMetric(next.key);
+    setShowSalesDetail(false);
+  };
+
+  const handleRankingMetricSelect = (key: RankingMetricKey) => {
+    if (key === "sales") {
+      if (rankingMetric === "sales") {
+        setShowSalesDetail((current) => !current);
+        return;
+      }
+      setRankingMetric("sales");
+      setShowSalesDetail(false);
+      return;
+    }
+
+    setRankingMetric(key);
+    setShowSalesDetail(false);
   };
 
   const handleRankingTouchStart = (event: TouchEvent<HTMLElement>) => {
@@ -834,29 +866,12 @@ export default function RankingBoard() {
     <main className="mx-auto min-h-screen w-full max-w-[430px] overflow-x-hidden bg-gray-50">
       <AppHeader title="ランキング" />
 
-      <div className="px-4 pb-64 pt-2">
+      <div className="px-4 pb-80 pt-2">
         <section
           className="rounded-2xl bg-white p-3 shadow-sm [touch-action:pan-y]"
           onTouchStart={handleRankingTouchStart}
           onTouchEnd={handleRankingTouchEnd}
         >
-          <div className="mb-3 flex rounded-2xl bg-gray-100 p-1">
-            {rankingMetricOptions.map((item) => (
-              <button
-                key={item.key}
-                type="button"
-                onClick={() => setRankingMetric(item.key)}
-                className={`${item.className} rounded-xl px-3 py-2 text-xs font-black ${
-                  rankingMetric === item.key
-                    ? "bg-green-600 text-white shadow-sm"
-                    : "text-gray-600"
-                }`}
-              >
-                {item.label}
-              </button>
-            ))}
-          </div>
-
           {rankingEntries.length === 0 ? (
             <div className="space-y-3">
               <div className="rounded-xl bg-gray-50 px-4 py-8 text-center text-sm font-bold text-gray-500">
@@ -885,6 +900,9 @@ export default function RankingBoard() {
                   ? `あなたの順位 ${myRankIndex + 1}位 / ${rankingEntries.length}人中`
                   : "この条件ではまだ順位がありません"}
               </div>
+              {rankingMetric === "sales" && showSalesDetail && (
+                <SalesDetailPanel entries={rankingEntries.slice(0, 10)} />
+              )}
               {visibleTop3.map((entry, index) => (
                 <div
                   key={entry.key}
@@ -942,7 +960,28 @@ export default function RankingBoard() {
 
       <section className="fixed bottom-[calc(4rem+env(safe-area-inset-bottom))] left-1/2 z-40 w-full max-w-[430px] -translate-x-1/2 px-4">
         <div className="rounded-2xl border border-gray-100 bg-white/95 px-3 py-3 shadow-[0_-8px_24px_rgba(15,23,42,0.12)] backdrop-blur">
-          <div className="flex gap-1.5 overflow-x-auto pb-0.5">
+          <div className="flex rounded-2xl bg-gray-100 p-1">
+            {rankingMetricOptions.map((item) => {
+              const isActive = rankingMetric === item.key;
+              const isDetailActive = item.key === "sales" && showSalesDetail;
+              return (
+                <button
+                  key={item.key}
+                  type="button"
+                  onClick={() => handleRankingMetricSelect(item.key)}
+                  className={`${item.className} min-w-0 rounded-xl px-2 py-2 text-[11px] font-black ${
+                    isActive
+                      ? "bg-green-600 text-white shadow-sm"
+                      : "text-gray-600"
+                  } ${isDetailActive ? "ring-2 ring-green-200" : ""}`}
+                >
+                  <span className="block truncate">{item.label}</span>
+                </button>
+              );
+            })}
+          </div>
+
+          <div className="mt-2 flex gap-1.5 overflow-x-auto pb-0.5">
             {periodOptions.map((item) => (
               <button
                 key={item.key}
@@ -1014,6 +1053,66 @@ export default function RankingBoard() {
         />
       )}
     </main>
+  );
+}
+
+function SalesDetailPanel({ entries }: { entries: RankingEntry[] }) {
+  return (
+    <div className="space-y-2 rounded-2xl border border-green-100 bg-green-50/70 p-3">
+      <div className="flex items-center justify-between gap-2">
+        <div>
+          <div className="text-sm font-black text-green-900">売上のサービス別内訳</div>
+          <div className="text-[11px] font-bold text-green-700">
+            上位10名まで表示しています
+          </div>
+        </div>
+        <div className="shrink-0 rounded-full bg-white px-2 py-1 text-[10px] font-black text-green-700 ring-1 ring-green-100">
+          内訳
+        </div>
+      </div>
+
+      <div className="space-y-2">
+        {entries.map((entry, index) => (
+          <div
+            key={entry.key}
+            className="rounded-xl border border-green-100 bg-white px-3 py-3"
+          >
+            <div className="flex items-start justify-between gap-2">
+              <div className="min-w-0">
+                <div className="text-xs font-black text-green-700">
+                  {index + 1}位
+                </div>
+                <div className="truncate text-sm font-black text-gray-900">
+                  {entry.name}
+                </div>
+              </div>
+              <div className="shrink-0 text-right">
+                <div className="text-[10px] font-bold text-gray-500">合計</div>
+                <div className="text-sm font-black text-gray-900">
+                  {formatCurrency(entry.total)}
+                </div>
+              </div>
+            </div>
+
+            <div className="mt-2 grid grid-cols-2 gap-1.5">
+              {serviceLabels.map((service) => (
+                <div
+                  key={service.key}
+                  className="min-w-0 rounded-lg bg-gray-50 px-2 py-1.5"
+                >
+                  <div className="truncate text-[10px] font-bold text-gray-500">
+                    {service.label}
+                  </div>
+                  <div className="text-xs font-black text-gray-900">
+                    {formatCurrency(serviceAmount(entry, service.key))}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
   );
 }
 
