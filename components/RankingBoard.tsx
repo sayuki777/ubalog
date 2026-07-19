@@ -196,6 +196,64 @@ function formatUnitPrice(amount: number) {
   return amount > 0 ? formatCurrency(amount) : "-";
 }
 
+function csvCell(value: string | number) {
+  const text = String(value ?? "");
+  if (/[",\r\n]/.test(text)) {
+    return `"${text.replaceAll("\"", "\"\"")}"`;
+  }
+  return text;
+}
+
+function buildSalesDetailCsv(entries: RankingEntry[]) {
+  const headers = [
+    "順位",
+    "名前",
+    "売上",
+    "Uber",
+    "ロケット",
+    "出前館",
+    "menu",
+    "その他",
+    "稼働時間",
+    "時給",
+    "件数",
+    "最大単価",
+    "都道府県",
+    "エリア",
+  ];
+  const rows = entries.map((entry, index) => [
+    index + 1,
+    entry.name,
+    entry.total,
+    serviceAmount(entry, "uber"),
+    serviceAmount(entry, "rocket"),
+    serviceAmount(entry, "demae"),
+    serviceAmount(entry, "menu"),
+    serviceAmount(entry, "other"),
+    formatMinutes(entry.workMinutes),
+    entry.hourly,
+    entry.deliveries,
+    maxServiceUnitPrice(entry),
+    entry.prefecture || "",
+    entry.area || "",
+  ]);
+
+  return [headers, ...rows].map((row) => row.map(csvCell).join(",")).join("\r\n");
+}
+
+function downloadSalesDetailCsv(entries: RankingEntry[]) {
+  const csv = `\uFEFF${buildSalesDetailCsv(entries)}`;
+  const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+  const url = URL.createObjectURL(blob);
+  const anchor = document.createElement("a");
+  anchor.href = url;
+  anchor.download = `ubalog-sales-detail-${todayIsoDate()}.csv`;
+  document.body.appendChild(anchor);
+  anchor.click();
+  anchor.remove();
+  URL.revokeObjectURL(url);
+}
+
 function locationLabel(entry: RankingEntry) {
   const prefecture = entry.prefecture || "-";
   const area = entry.area || "-";
@@ -1058,6 +1116,12 @@ function SalesDetailPanel({
   entries: RankingEntry[];
   onClose: () => void;
 }) {
+  const [exportMessage, setExportMessage] = useState("");
+  const handleExportCsv = () => {
+    downloadSalesDetailCsv(entries);
+    setExportMessage("CSVを出力しました");
+  };
+
   return (
     <div className="rounded-2xl border border-green-100 bg-white p-3 shadow-sm">
       <div className="flex items-center justify-between gap-2">
@@ -1154,6 +1218,20 @@ function SalesDetailPanel({
 
       <div className="mt-2 text-[11px] font-bold text-gray-500">
         表の中だけ横にスライドできます
+      </div>
+      <div className="mt-3 flex flex-col gap-2 sm:flex-row">
+        <button
+          type="button"
+          onClick={handleExportCsv}
+          className="h-10 w-full rounded-xl bg-green-600 px-4 text-sm font-black text-white active:bg-green-700"
+        >
+          CSV出力
+        </button>
+        {exportMessage && (
+          <div className="rounded-xl bg-green-50 px-3 py-2 text-center text-xs font-bold text-green-700">
+            {exportMessage}
+          </div>
+        )}
       </div>
     </div>
   );

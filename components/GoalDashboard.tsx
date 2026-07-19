@@ -66,7 +66,7 @@ function formatCurrency(amount: number) {
 
 function formatShortCurrency(amount: number) {
   if (amount <= 0) return "-";
-  return Math.floor(amount).toLocaleString();
+  return String(Math.floor(amount));
 }
 
 function formatMinutes(minutes: number) {
