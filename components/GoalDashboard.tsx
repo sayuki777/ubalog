@@ -66,8 +66,7 @@ function formatCurrency(amount: number) {
 
 function formatShortCurrency(amount: number) {
   if (amount <= 0) return "-";
-  if (amount >= 10000) return `${Math.floor(amount / 1000) / 10}万`;
-  return amount.toLocaleString();
+  return Math.floor(amount).toLocaleString();
 }
 
 function formatMinutes(minutes: number) {
@@ -218,6 +217,38 @@ function remainingDaysFromToday(month: string) {
   return Math.max(daysInMonth(month) - today.getDate() + 1, 1);
 }
 
+function weekDatesForMonth(month: string) {
+  const today = new Date();
+  const [year, monthNumber] = month.split("-").map(Number);
+  const base =
+    month === monthKey(today)
+      ? today
+      : new Date(year, monthNumber - 1, 1);
+  const mondayOffset = (base.getDay() + 6) % 7;
+  const monday = new Date(base);
+  monday.setDate(base.getDate() - mondayOffset);
+
+  return Array.from({ length: 7 }, (_, index) => {
+    const date = new Date(monday);
+    date.setDate(monday.getDate() + index);
+    return toIsoDate(date);
+  }).filter((date) => date.startsWith(month));
+}
+
+function progressRateForDates(dates: string[]) {
+  if (dates.length === 0) return 0;
+  const today = toIsoDate(new Date());
+  if (dates.every((date) => date < today)) return 100;
+  if (dates.every((date) => date > today)) return 0;
+  const elapsed = dates.filter((date) => date <= today).length;
+  return Math.min(100, Math.floor((elapsed / dates.length) * 100));
+}
+
+function remainingDaysFromDates(dates: string[]) {
+  const today = toIsoDate(new Date());
+  return dates.filter((date) => date >= today).length;
+}
+
 function supportComment(target: number, actual: number) {
   if (target <= 0) return "今日の目標を入れてみよう";
   if (actual >= target) return "達成！いい感じです";
@@ -265,6 +296,18 @@ export default function GoalDashboard({ records, currentMonth, onChangeMonth }: 
     (sum, date) => sum + (summaries.get(date)?.total ?? 0),
     0
   );
+  const weekDates = useMemo(() => weekDatesForMonth(month), [month]);
+  const weekTarget = weekDates.reduce((sum, date) => sum + (goalMap.get(date) ?? 0), 0);
+  const weekTotal = weekDates.reduce(
+    (sum, date) => sum + (summaries.get(date)?.total ?? 0),
+    0
+  );
+  const remainingWeekAmount = Math.max(weekTarget - weekTotal, 0);
+  const weekRemainingDays = remainingDaysFromDates(weekDates);
+  const neededWeekDailyAmount =
+    weekTarget > 0 && weekRemainingDays > 0 && remainingWeekAmount > 0
+      ? Math.ceil(remainingWeekAmount / weekRemainingDays)
+      : 0;
   const remainingMonthAmount = Math.max(monthTarget - monthTotal, 0);
   const remainingDays = remainingDaysFromToday(month);
   const neededDailyAmount =
@@ -353,6 +396,67 @@ export default function GoalDashboard({ records, currentMonth, onChangeMonth }: 
         </div>
       </section>
 
+      <section className="rounded-2xl bg-white p-3 shadow-sm">
+        <div className="mb-2 flex items-center justify-between gap-2 text-[10px] font-black">
+          <div className="text-blue-600">青: 目標</div>
+          <div className="text-green-700">緑: 売上</div>
+        </div>
+        <div className="mb-2 grid grid-cols-7 gap-1 text-center text-[10px] font-black text-gray-500">
+          {["月", "火", "水", "木", "金", "土", "日"].map((day) => (
+            <div key={day}>{day}</div>
+          ))}
+        </div>
+        <div className="grid grid-cols-7 gap-1">
+          {calendarCells.map((date, index) => {
+            if (!date) return <div key={`blank-${index}`} className="aspect-[0.82]" />;
+            const summary = summaries.get(date) ?? emptySummary(date);
+            const target = goalMap.get(date) ?? 0;
+            const achieved = target > 0 && summary.total >= target;
+            const isFuture = date > today;
+            return (
+              <button
+                key={date}
+                type="button"
+                onClick={() => openDetail(date)}
+                className={`min-w-0 rounded-lg border px-1 py-1 text-left ${
+                  achieved
+                    ? "border-green-200 bg-green-50"
+                    : isFuture
+                    ? "border-gray-100 bg-gray-50 text-gray-400"
+                    : "border-gray-100 bg-white"
+                }`}
+              >
+                <div className="text-[10px] font-black">{Number(date.slice(8, 10))}</div>
+                <div className="mt-0.5 whitespace-nowrap text-[9px] font-black leading-tight text-blue-600">
+                  {target > 0 ? formatShortCurrency(target) : "-"}
+                </div>
+                <div className="whitespace-nowrap text-[9px] font-black leading-tight text-green-700">
+                  {summary.total > 0 ? formatShortCurrency(summary.total) : "0"}
+                </div>
+              </button>
+            );
+          })}
+        </div>
+        <div className="mt-3 rounded-xl bg-gray-50 px-3 py-2 text-xs font-black text-gray-700">
+          {supportComment(todayTarget, todaySummary.total)}
+        </div>
+      </section>
+
+      <GoalProgressSummary
+        weekTarget={weekTarget}
+        weekTotal={weekTotal}
+        weekProgressRate={progressRateForDates(weekDates)}
+        weekRemainingAmount={remainingWeekAmount}
+        neededWeekDailyAmount={neededWeekDailyAmount}
+        isCurrentWeek={weekDates.includes(today)}
+        monthTarget={monthTarget}
+        monthTotal={monthTotal}
+        monthProgressRateValue={monthProgressRate(month)}
+        monthRemainingAmount={remainingMonthAmount}
+        neededMonthDailyAmount={neededDailyAmount}
+        isCurrentMonth={month === today.slice(0, 7)}
+      />
+
       <section className="rounded-2xl bg-white p-4 shadow-sm">
         <div className="flex items-start justify-between gap-3">
           <div>
@@ -418,61 +522,6 @@ export default function GoalDashboard({ records, currentMonth, onChangeMonth }: 
         )}
       </section>
 
-      <section className="rounded-2xl bg-white p-3 shadow-sm">
-        <div className="mb-2 flex items-center justify-between gap-2 text-[10px] font-black">
-          <div className="text-blue-600">青: 目標</div>
-          <div className="text-green-700">緑: 売上</div>
-        </div>
-        <div className="mb-2 grid grid-cols-7 gap-1 text-center text-[10px] font-black text-gray-500">
-          {["月", "火", "水", "木", "金", "土", "日"].map((day) => (
-            <div key={day}>{day}</div>
-          ))}
-        </div>
-        <div className="grid grid-cols-7 gap-1">
-          {calendarCells.map((date, index) => {
-            if (!date) return <div key={`blank-${index}`} className="aspect-[0.82]" />;
-            const summary = summaries.get(date) ?? emptySummary(date);
-            const target = goalMap.get(date) ?? 0;
-            const achieved = target > 0 && summary.total >= target;
-            const isFuture = date > today;
-            return (
-              <button
-                key={date}
-                type="button"
-                onClick={() => openDetail(date)}
-                className={`min-w-0 rounded-lg border px-1 py-1 text-left ${
-                  achieved
-                    ? "border-green-200 bg-green-50"
-                    : isFuture
-                    ? "border-gray-100 bg-gray-50 text-gray-400"
-                    : "border-gray-100 bg-white"
-                }`}
-              >
-                <div className="text-[10px] font-black">{Number(date.slice(8, 10))}</div>
-                <div className="mt-0.5 whitespace-nowrap text-[9px] font-black leading-tight text-blue-600">
-                  {target > 0 ? formatShortCurrency(target) : "-"}
-                </div>
-                <div className="whitespace-nowrap text-[9px] font-black leading-tight text-green-700">
-                  {summary.total > 0 ? formatShortCurrency(summary.total) : "0"}
-                </div>
-              </button>
-            );
-          })}
-        </div>
-        <div className="mt-3 rounded-xl bg-gray-50 px-3 py-2 text-xs font-black text-gray-700">
-          {supportComment(todayTarget, todaySummary.total)}
-        </div>
-      </section>
-
-      <GoalProgressSummary
-        monthTarget={monthTarget}
-        monthTotal={monthTotal}
-        progressRate={monthProgressRate(month)}
-        remainingAmount={remainingMonthAmount}
-        neededDailyAmount={neededDailyAmount}
-        isCurrentMonth={month === today.slice(0, 7)}
-      />
-
       <GoalTable
         dates={monthDates}
         goals={goalMap}
@@ -497,43 +546,82 @@ export default function GoalDashboard({ records, currentMonth, onChangeMonth }: 
 }
 
 function GoalProgressSummary({
+  weekTarget,
+  weekTotal,
+  weekProgressRate,
+  weekRemainingAmount,
+  neededWeekDailyAmount,
+  isCurrentWeek,
   monthTarget,
   monthTotal,
-  progressRate,
-  remainingAmount,
-  neededDailyAmount,
+  monthProgressRateValue,
+  monthRemainingAmount,
+  neededMonthDailyAmount,
   isCurrentMonth,
 }: {
+  weekTarget: number;
+  weekTotal: number;
+  weekProgressRate: number;
+  weekRemainingAmount: number;
+  neededWeekDailyAmount: number;
+  isCurrentWeek: boolean;
   monthTarget: number;
   monthTotal: number;
-  progressRate: number;
-  remainingAmount: number;
-  neededDailyAmount: number;
+  monthProgressRateValue: number;
+  monthRemainingAmount: number;
+  neededMonthDailyAmount: number;
   isCurrentMonth: boolean;
 }) {
-  const achievementRate = monthTarget > 0 ? Math.floor((monthTotal / monthTarget) * 100) : 0;
+  const weekAchievementRate = weekTarget > 0 ? Math.floor((weekTotal / weekTarget) * 100) : 0;
+  const monthAchievementRate = monthTarget > 0 ? Math.floor((monthTotal / monthTarget) * 100) : 0;
 
   return (
     <section className="rounded-2xl bg-white p-4 shadow-sm">
-      <div className="text-sm font-black text-gray-900">月の目標状況</div>
-      <div className="mt-3 grid grid-cols-2 gap-2">
-        <MiniStat label="月間目標" value={monthTarget > 0 ? formatCurrency(monthTarget) : "-"} />
-        <MiniStat label="現在売上" value={formatCurrency(monthTotal)} />
-        <MiniStat label="達成率" value={monthTarget > 0 ? `${achievementRate}%` : "-"} />
-        <MiniStat label="月進捗" value={`${progressRate}%`} />
-        <MiniStat label="あと" value={formatCurrency(remainingAmount)} />
-        <MiniStat
-          label="今日から"
-          value={
-            !isCurrentMonth
-              ? "-"
-              : monthTarget > 0 && remainingAmount <= 0
-              ? "達成済み"
-              : monthTarget > 0
-              ? `${formatCurrency(neededDailyAmount)}/日`
-              : "-"
-          }
-        />
+      <div className="text-sm font-black text-gray-900">目標状況</div>
+      <div className="mt-3 rounded-2xl bg-green-50 p-3">
+        <div className="text-xs font-black text-green-800">今週の目標状況</div>
+        <div className="mt-2 grid grid-cols-2 gap-2">
+          <MiniStat label="今週の目標" value={weekTarget > 0 ? formatCurrency(weekTarget) : "-"} />
+          <MiniStat label="今週の売上" value={formatCurrency(weekTotal)} />
+          <MiniStat label="達成率" value={weekTarget > 0 ? `${weekAchievementRate}%` : "-"} />
+          <MiniStat label="週進捗" value={`${weekProgressRate}%`} />
+          <MiniStat label="あと" value={formatCurrency(weekRemainingAmount)} />
+          <MiniStat
+            label="今日から"
+            value={
+              !isCurrentWeek
+                ? "-"
+                : weekTarget > 0 && weekRemainingAmount <= 0
+                ? "達成済み"
+                : weekTarget > 0
+                ? `${formatCurrency(neededWeekDailyAmount)}/日`
+                : "-"
+            }
+          />
+        </div>
+      </div>
+
+      <div className="mt-3 rounded-2xl bg-gray-50 p-3">
+        <div className="text-xs font-black text-gray-700">今月分</div>
+        <div className="mt-2 grid grid-cols-2 gap-2">
+          <MiniStat label="月間目標" value={monthTarget > 0 ? formatCurrency(monthTarget) : "-"} />
+          <MiniStat label="月間売上" value={formatCurrency(monthTotal)} />
+          <MiniStat label="達成率" value={monthTarget > 0 ? `${monthAchievementRate}%` : "-"} />
+          <MiniStat label="月進捗" value={`${monthProgressRateValue}%`} />
+          <MiniStat label="あと" value={formatCurrency(monthRemainingAmount)} />
+          <MiniStat
+            label="今日から"
+            value={
+              !isCurrentMonth
+                ? "-"
+                : monthTarget > 0 && monthRemainingAmount <= 0
+                ? "達成済み"
+                : monthTarget > 0
+                ? `${formatCurrency(neededMonthDailyAmount)}/日`
+                : "-"
+            }
+          />
+        </div>
       </div>
     </section>
   );
