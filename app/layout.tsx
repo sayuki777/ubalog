@@ -6,6 +6,7 @@ const appTitle = "ウバログ｜配達記録アプリ";
 const appDescription =
   "フードデリバリー配達員向けの売上記録・ランキング・リアルタイム報酬共有アプリ";
 const appUrl = "https://ubalog.vercel.app";
+const ogpImageUrl = `${appUrl}/ogp.png`;
 
 export const metadata: Metadata = {
   metadataBase: new URL(appUrl),
@@ -28,7 +29,7 @@ export const metadata: Metadata = {
     type: "website",
     images: [
       {
-        url: "/ogp.png",
+        url: ogpImageUrl,
         width: 1200,
         height: 630,
         alt: "ウバログ 配達記録アプリ",
@@ -39,7 +40,7 @@ export const metadata: Metadata = {
     card: "summary_large_image",
     title: appTitle,
     description: appDescription,
-    images: ["/ogp.png"],
+    images: [ogpImageUrl],
   },
 };
 
