@@ -196,6 +196,15 @@ function formatUnitPrice(amount: number) {
   return amount > 0 ? formatCurrency(amount) : "-";
 }
 
+function locationLabel(entry: RankingEntry) {
+  const prefecture = entry.prefecture || "-";
+  const area = entry.area || "-";
+  if (prefecture === "-" && area === "-") return "-";
+  if (prefecture === "-") return area;
+  if (area === "-") return prefecture;
+  return `${prefecture}・${area}`;
+}
+
 function formatOfferAge(createdAt?: string) {
   const time = new Date(createdAt ?? "").getTime();
   if (!time) return "-";
@@ -634,13 +643,13 @@ function subMetrics(entry: RankingEntry, metric: RankingMetricKey) {
     return [
       `売上 ${formatCurrency(entry.total)}`,
       `時給 ${formatHourly(entry.hourly)}`,
-      `1件単価 ${formatUnitPrice(entry.unitPrice)}`,
+      locationLabel(entry),
     ];
   }
   return [
     `時給 ${formatHourly(entry.hourly)}`,
     `${entry.deliveries.toLocaleString()}件`,
-    `1件単価 ${formatUnitPrice(entry.unitPrice)}`,
+    locationLabel(entry),
   ];
 }
 
@@ -1207,7 +1216,7 @@ function PodiumCard({
 
   const styles =
     rank === 1
-      ? "border-yellow-300 bg-yellow-50 shadow-md"
+      ? "border-yellow-300 bg-yellow-50"
       : rank === 2
       ? "border-gray-200 bg-gray-50"
       : "border-amber-200 bg-amber-50";
@@ -1217,18 +1226,12 @@ function PodiumCard({
     <button
       type="button"
       onClick={onSelect}
-      className={`block w-full rounded-2xl border p-4 text-left active:scale-[0.99] ${styles}`}
+      className={`block w-full rounded-2xl border p-3 text-left active:scale-[0.99] ${styles}`}
     >
-      <div className="flex items-start justify-between gap-3">
+      <div className="flex items-start justify-between gap-2">
         <div className="min-w-0">
           <div className="flex items-center gap-2">
-            <span
-              className={
-                rank === 1
-                  ? "text-base font-black text-gray-900"
-                  : "text-sm font-black text-gray-900"
-              }
-            >
+            <span className="shrink-0 rounded-full bg-white/80 px-2 py-1 text-xs font-black text-gray-900">
               {rank}位
             </span>
             {entry.isCurrentUser && (
@@ -1237,42 +1240,21 @@ function PodiumCard({
               </span>
             )}
           </div>
-          <div
-            className={
-              rank === 1
-                ? "mt-1 truncate text-lg font-black text-gray-900"
-                : "mt-1 truncate text-base font-black text-gray-900"
-            }
-          >
+          <div className="mt-1 truncate text-base font-black text-gray-900">
             {entry.name}
           </div>
-          {(entry.prefecture || entry.area) && (
-            <div className="mt-1 truncate text-[11px] font-bold text-gray-500">
-              {[entry.prefecture, entry.area].filter(Boolean).join(" / ")}
-            </div>
-          )}
+          <div className="mt-1 truncate text-[11px] font-bold text-gray-500">
+            {details.join(" / ")}
+          </div>
         </div>
         <div className="shrink-0 text-right">
-          <div
-            className={
-              rank === 1
-                ? "text-3xl font-black text-gray-900"
-                : "text-xl font-black text-gray-900"
-            }
-          >
+          <div className="text-xl font-black text-gray-900">
             {mainMetricValue(entry, metric)}
           </div>
-          <div className="text-xs font-bold text-green-700">
+          <div className="text-[10px] font-bold text-green-700">
             {metricCaption(metric)}
           </div>
         </div>
-      </div>
-      <div className="mt-3 grid grid-cols-3 gap-2 text-center text-[11px] font-bold text-gray-600">
-        {details.map((detail) => (
-          <div key={detail} className="rounded-xl bg-white/80 px-2 py-2">
-            {detail}
-          </div>
-        ))}
       </div>
     </button>
   );
@@ -1294,42 +1276,12 @@ function RankingCard({
   }
 
   const details = subMetrics(entry, metric);
-  const isSimple = rank === 4 || rank === 5;
-  const isCompact = rank >= 6 && rank <= 10;
-  const isMinimal = rank >= 11;
-
-  if (isMinimal) {
-    return (
-      <button
-        type="button"
-        onClick={onSelect}
-        className={`flex w-full items-center justify-between gap-2 rounded-xl border px-3 py-2 text-left active:scale-[0.99] ${
-          entry.isCurrentUser ? "border-green-300 bg-green-50" : "border-gray-100 bg-white"
-        }`}
-      >
-        <div className="flex min-w-0 items-center gap-2">
-          <span className="shrink-0 text-xs font-black text-gray-500">{rank}位</span>
-          <span className="truncate text-sm font-bold text-gray-800">{entry.name}</span>
-          {entry.isCurrentUser && (
-            <span className="shrink-0 rounded-full bg-green-600 px-1.5 py-0.5 text-[10px] font-bold text-white">
-              あなた
-            </span>
-          )}
-        </div>
-        <div className="shrink-0 text-sm font-black text-gray-900">
-          {mainMetricValue(entry, metric)}
-        </div>
-      </button>
-    );
-  }
 
   return (
     <button
       type="button"
       onClick={onSelect}
-      className={`block w-full rounded-2xl border text-left active:scale-[0.99] ${
-        isCompact ? "p-2.5" : "p-3"
-      } ${
+      className={`block w-full rounded-2xl border p-3 text-left active:scale-[0.99] ${
         entry.isCurrentUser ? "border-green-300 bg-green-50" : "border-gray-100 bg-white"
       }`}
     >
@@ -1348,27 +1300,12 @@ function RankingCard({
               </span>
             )}
           </div>
-          {!isCompact && (
-            <div className="mt-1 truncate text-[11px] font-bold text-gray-500">
-              {[...details, entry.area || entry.prefecture]
-                .filter(Boolean)
-                .join(" / ")}
-            </div>
-          )}
-          {isCompact && (
-            <div className="mt-0.5 truncate text-[10px] font-bold text-gray-500">
-              {details.slice(0, 2).join(" / ")}
-            </div>
-          )}
+          <div className="mt-1 truncate text-[11px] font-bold text-gray-500">
+            {details.join(" / ")}
+          </div>
         </div>
         <div className="shrink-0 text-right">
-          <div
-            className={
-              isCompact
-                ? "text-sm font-black text-gray-900"
-                : "text-base font-black text-gray-900"
-            }
-          >
+          <div className="text-base font-black text-gray-900">
             {mainMetricValue(entry, metric)}
           </div>
           <div className="text-[10px] font-bold text-green-700">
@@ -1376,11 +1313,6 @@ function RankingCard({
           </div>
         </div>
       </div>
-      {isSimple && (
-        <div className="mt-1 text-[11px] font-bold text-gray-400">
-          {details.join(" / ")}
-        </div>
-      )}
     </button>
   );
 }
@@ -1400,134 +1332,45 @@ function UnitPriceRankingCard({
   const rankLabel = offer?.rank ? `${offer.rank}ランク` : "";
   const serviceLabel = offer?.service ?? "サービス -";
   const distanceLabel = offer ? `${offer.distanceKm.toLocaleString()}km` : "-";
-  const isMedium = rank === 4 || rank === 5;
-  const isCompact = rank >= 6 && rank <= 10;
-  const isMinimal = rank >= 11;
-
-  if (isMinimal) {
-    return (
-      <button
-        type="button"
-        onClick={onSelect}
-        className="flex w-full items-center justify-between gap-2 rounded-xl border border-gray-100 bg-white px-3 py-2 text-left active:scale-[0.99]"
-      >
-        <div className="flex min-w-0 items-center gap-2">
-          <span className="shrink-0 text-xs font-black text-gray-500">{rank}位</span>
-          <span className="truncate text-sm font-bold text-gray-700">{serviceLabel}</span>
-        </div>
-        <div className="shrink-0 text-sm font-black text-gray-900">
-          {mainMetricValue(entry, "unitPrice")}
-        </div>
-      </button>
-    );
-  }
-
-  if (isCompact) {
-    return (
-      <button
-        type="button"
-        onClick={onSelect}
-        className="block w-full rounded-xl border border-gray-100 bg-white p-2.5 text-left active:scale-[0.99]"
-      >
-        <div className="flex items-center justify-between gap-2">
-          <div className="flex min-w-0 items-center gap-2">
-            <span className="shrink-0 rounded-full bg-gray-100 px-2 py-1 text-xs font-black text-gray-700">
-              {rank}位
-            </span>
-            <span className="truncate text-sm font-black text-gray-900">{serviceLabel}</span>
-          </div>
-          <div className="shrink-0 text-base font-black text-gray-900">
-            {mainMetricValue(entry, "unitPrice")}
-          </div>
-        </div>
-        <div className="mt-1 truncate text-[10px] font-bold text-gray-500">
-          距離 {distanceLabel}
-        </div>
-      </button>
-    );
-  }
-
-  if (isMedium) {
-    return (
-      <button
-        type="button"
-        onClick={onSelect}
-        className="block w-full rounded-2xl border border-gray-100 bg-white p-3 text-left active:scale-[0.99]"
-      >
-        <div className="flex items-start justify-between gap-3">
-          <div className="min-w-0">
-            <div className="flex items-center gap-2">
-              <span className="rounded-full bg-gray-100 px-2 py-1 text-xs font-black text-gray-700">
-                {rank}位
-              </span>
-              {rankLabel && (
-                <span className="rounded-full bg-green-600 px-2 py-0.5 text-[10px] font-bold text-white">
-                  {rankLabel}
-                </span>
-              )}
-            </div>
-            <div className="mt-1 truncate text-sm font-bold text-green-700">
-              {serviceLabel} / 距離 {distanceLabel}
-            </div>
-            <div className="mt-1 truncate text-xs font-bold text-gray-500">
-              共有者: {entry.name}
-            </div>
-          </div>
-          <div className="shrink-0 text-right">
-            <div className="text-xl font-black text-gray-900">
-              {mainMetricValue(entry, "unitPrice")}
-            </div>
-            <div className="text-[10px] font-bold text-green-700">報酬順</div>
-          </div>
-        </div>
-      </button>
-    );
-  }
 
   return (
     <button
       type="button"
       onClick={onSelect}
-      className={`block w-full rounded-2xl border p-4 text-left active:scale-[0.99] ${
+      className={`block w-full rounded-2xl border p-3 text-left active:scale-[0.99] ${
         featured
-          ? "border-yellow-300 bg-yellow-50 shadow-md"
+          ? "border-yellow-300 bg-yellow-50"
           : "border-gray-100 bg-white"
       }`}
     >
-      <div className="flex items-start justify-between gap-3">
+      <div className="flex items-start justify-between gap-2">
         <div className="min-w-0">
           <div className="flex items-center gap-2">
-            <span className="text-sm font-black text-gray-900">{rank}位</span>
+            <span className="shrink-0 rounded-full bg-gray-100 px-2 py-1 text-xs font-black text-gray-800">
+              {rank}位
+            </span>
             {rankLabel && (
               <span className="rounded-full bg-green-600 px-2 py-0.5 text-[10px] font-bold text-white">
                 {rankLabel}
               </span>
             )}
           </div>
-          <div className="mt-1 text-2xl font-black text-gray-900">
+          <div className="mt-1 truncate text-sm font-black text-gray-900">
+            {serviceLabel}
+          </div>
+          <div className="mt-1 truncate text-[11px] font-bold text-gray-500">
+            距離 {distanceLabel} / 共有者: {entry.name}
+          </div>
+        </div>
+        <div className="shrink-0 text-right">
+          <div className="text-base font-black text-gray-900">
             {mainMetricValue(entry, "unitPrice")}
           </div>
-          <div className="mt-1 text-sm font-bold text-green-700">
-            {offer?.service ?? "サービス -"} / 報酬単価ランキング
+          <div className="text-[10px] font-bold text-green-700">報酬順</div>
+          <div className="mt-0.5 text-[10px] font-bold text-gray-400">
+            {formatOfferAge(offer?.createdAt)}
           </div>
         </div>
-        <div className="shrink-0 text-right text-xs font-bold text-gray-500">
-          {formatOfferAge(offer?.createdAt)}
-        </div>
-      </div>
-
-      <div className="mt-3 rounded-xl bg-white/80 px-3 py-2 text-sm font-bold text-gray-700">
-        距離 {offer ? `${offer.distanceKm.toLocaleString()}km` : "-"}
-        {entry.unitPrice > 0 && (
-          <span className="ml-2 text-xs text-gray-500">
-            / 参考 {formatCurrency(entry.unitPrice)}/km
-          </span>
-        )}
-      </div>
-
-      <div className="mt-2 flex min-w-0 items-center justify-between gap-2 text-xs font-bold text-gray-500">
-        <span className="min-w-0 truncate">共有者: {entry.name}</span>
-        {entry.area && <span className="shrink-0 truncate">{entry.area}</span>}
       </div>
     </button>
   );

@@ -11,6 +11,7 @@ import SaveButton from "@/components/SaveButton";
 import Toast from "@/components/Toast";
 import RocketNowDailyScanGuide from "@/components/RocketNowDailyScanGuide";
 import RocketNowBulkImportPanel from "@/components/RocketNowBulkImportPanel";
+import RecordStatsGoalsPanel from "@/components/RecordStatsGoalsPanel";
 import { PREFECTURES } from "@/lib/areas";
 import { getMonthlyGoal } from "@/lib/goals";
 import { saveHighlightUpdate, type HighlightField } from "@/lib/highlights";
@@ -115,6 +116,7 @@ function loadRecords(): StoredRecord[] {
 
 function saveRecords(records: StoredRecord[]) {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(records));
+  window.dispatchEvent(new Event("ubalog-records-updated"));
 }
 
 function loadProfile(): Profile {
@@ -1047,7 +1049,7 @@ export default function RecordForm() {
                 ランキングを見る
               </Link>
               <Link
-                href="/"
+                href="/mypage"
                 className="rounded-xl border border-green-200 px-2 py-2 text-center text-xs font-black text-green-700"
               >
                 マイページ
@@ -1076,6 +1078,8 @@ export default function RecordForm() {
           </div>
           <RocketNowDisplayResetButton />
         </div>
+
+        <RecordStatsGoalsPanel />
       </div>
 
       <SaveButton onClick={handleSave} preview={savePreview} disabled={saving} />
