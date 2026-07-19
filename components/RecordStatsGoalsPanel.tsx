@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { getMonthlyGoal } from "@/lib/goals";
+import GoalDashboard from "@/components/GoalDashboard";
 import { fetchSharedRecords, mergeRecords, type SharedRecord } from "@/lib/sharedRecords";
 import {
   ensureActiveUserFromProfile,
@@ -99,40 +99,12 @@ function totalDeliveries(record: StoredRecord) {
   );
 }
 
-function daysInMonth(month: string) {
-  const [year, monthNumber] = month.split("-").map(Number);
-  return new Date(year, monthNumber, 0).getDate();
-}
-
-function remainingDaysForMonth(month: string) {
-  const today = new Date();
-  const currentMonth = monthKey(today);
-  if (month < currentMonth) return 0;
-  if (month > currentMonth) return daysInMonth(month);
-  return Math.max(daysInMonth(month) - today.getDate() + 1, 1);
-}
-
-function monthlyTarget(month: string) {
-  return getMonthlyGoal(month)?.dailyGoals.reduce(
-    (sum, goal) => sum + goal.targetAmount,
-    0
-  ) ?? 0;
-}
-
-function supportComment(target: number, actual: number) {
-  if (target <= 0) return "まずは今月の目標を入れてみよう";
-  if (actual <= 0) return "今日の1件からスタートしよう";
-  if (actual >= target) return "今月の目標達成！すごい！";
-  if (actual / target >= 0.5) return "いいペースです";
-  return "コツコツ積み上げよう";
-}
-
 export default function RecordStatsGoalsPanel() {
   const [open, setOpen] = useState(false);
   const [activeTab, setActiveTab] = useState<"score" | "goal">("score");
   const [records, setRecords] = useState<StoredRecord[]>([]);
   const [activeUser, setActiveUser] = useState<UbalogUser | null>(null);
-  const [, setGoalVersion] = useState(0);
+  const [currentMonth, setCurrentMonth] = useState(() => new Date());
   const month = monthKey(new Date());
 
   useEffect(() => {
@@ -156,19 +128,16 @@ export default function RecordStatsGoalsPanel() {
       });
     };
 
-    const refreshGoals = () => setGoalVersion((current) => current + 1);
     const timer = window.setTimeout(load, 0);
     window.addEventListener("focus", load);
     window.addEventListener("ubalog-records-updated", load);
     window.addEventListener("ubalog-profile-updated", load);
-    window.addEventListener("ubalog-goals-updated", refreshGoals);
 
     return () => {
       window.clearTimeout(timer);
       window.removeEventListener("focus", load);
       window.removeEventListener("ubalog-records-updated", load);
       window.removeEventListener("ubalog-profile-updated", load);
-      window.removeEventListener("ubalog-goals-updated", refreshGoals);
     };
   }, []);
 
@@ -196,13 +165,11 @@ export default function RecordStatsGoalsPanel() {
     previousTotal > 0
       ? `${monthTotal >= previousTotal ? "+" : "-"}${formatCurrency(Math.abs(monthTotal - previousTotal))}`
       : "-";
-  const targetAmount = monthlyTarget(month);
-  const remainingAmount = Math.max(targetAmount - monthTotal, 0);
-  const achieved = targetAmount > 0 && monthTotal >= targetAmount;
-  const dailyPace =
-    targetAmount > 0 && !achieved
-      ? Math.ceil(remainingAmount / remainingDaysForMonth(month))
-      : 0;
+  const changeMonth = (diff: number) => {
+    setCurrentMonth(
+      (current) => new Date(current.getFullYear(), current.getMonth() + diff, 1)
+    );
+  };
 
   return (
     <section className="mt-4 rounded-2xl bg-white p-4 shadow-sm">
@@ -254,23 +221,11 @@ export default function RecordStatsGoalsPanel() {
               <MiniStat label="記録日" value={`${monthRecords.length}日分`} />
             </div>
           ) : (
-            <div className="space-y-2">
-              <div className="grid grid-cols-2 gap-2">
-                <MiniStat label="今月の目標" value={formatCurrency(targetAmount)} strong />
-                <MiniStat label="現在売上" value={formatCurrency(monthTotal)} strong />
-                <MiniStat
-                  label={achieved ? "達成状況" : "あといくら"}
-                  value={achieved ? "達成！" : formatCurrency(remainingAmount)}
-                />
-                <MiniStat
-                  label="今日からなら"
-                  value={targetAmount > 0 ? (achieved ? "このペースでOK" : `${formatCurrency(dailyPace)}/日`) : "-"}
-                />
-              </div>
-              <div className="rounded-xl bg-green-50 px-3 py-2 text-xs font-black text-green-800">
-                {supportComment(targetAmount, monthTotal)}
-              </div>
-            </div>
+            <GoalDashboard
+              records={personalRecords}
+              currentMonth={currentMonth}
+              onChangeMonth={changeMonth}
+            />
           )}
         </div>
       )}
