@@ -11,6 +11,7 @@ import SaveButton from "@/components/SaveButton";
 import Toast from "@/components/Toast";
 import RocketNowDailyScanGuide from "@/components/RocketNowDailyScanGuide";
 import RocketNowBulkImportPanel from "@/components/RocketNowBulkImportPanel";
+import RecordGoalCalendar from "@/components/RecordGoalCalendar";
 import RecordStatsGoalsPanel from "@/components/RecordStatsGoalsPanel";
 import { PREFECTURES } from "@/lib/areas";
 import { getMonthlyGoal } from "@/lib/goals";
@@ -507,11 +508,6 @@ export default function RecordForm() {
     return clampNumber(end - start - rest, 0, MAX_WORK_MINUTES);
   }, [startTime, endTime, breakTime]);
 
-  const hourly = useMemo(() => {
-    if (workMinutes === 0) return 0;
-    return Math.floor(total / (workMinutes / 60));
-  }, [total, workMinutes]);
-
   const workText = useMemo(() => {
     if (!startTime || !endTime || workMinutes === 0) return "-";
     const h = Math.floor(workMinutes / 60);
@@ -526,12 +522,6 @@ export default function RecordForm() {
   }, [date]);
 
   const goalDiff = total - dailyGoalAmount;
-  const goalMessage =
-    dailyGoalAmount > 0
-      ? goalDiff >= 0
-        ? `目標達成！ +${formatCurrency(goalDiff)}`
-        : `あと ${formatCurrency(Math.abs(goalDiff))}`
-      : "";
   const showRecordGuide = !recordGuideDismissed && !isEditing && recordCount < 3;
   const dismissRecordGuide = () => {
     writeStorageBoolean(RECORD_GUIDE_DISMISSED_KEY, true);
@@ -825,36 +815,7 @@ export default function RecordForm() {
           />
         </div>
 
-        <div className="mt-3 rounded-2xl bg-green-50 px-3 py-2">
-          <div className="flex items-end justify-between gap-3">
-            <div>
-              <div className="text-[11px] font-bold text-green-700">合計</div>
-              <div className="text-2xl font-black leading-tight text-gray-950">
-                ￥{total.toLocaleString()}
-              </div>
-            </div>
-            <div className="text-right">
-              <div className="text-[11px] font-bold text-green-700">時給</div>
-              <div className="text-lg font-black text-gray-900">
-                ￥{hourly.toLocaleString()}
-              </div>
-            </div>
-            <div className="shrink-0 text-right">
-              <div className="text-[11px] font-bold text-gray-500">稼働</div>
-              <div className="text-sm font-black text-gray-700">{workText}</div>
-            </div>
-          </div>
-          {dailyGoalAmount > 0 && (
-            <div className="mt-2 flex items-center justify-between rounded-xl bg-white px-3 py-2 text-xs font-bold">
-              <div className="text-gray-600">
-                今日の目標 {formatCurrency(dailyGoalAmount)}
-              </div>
-              <div className={goalDiff >= 0 ? "text-green-700" : "text-gray-700"}>
-                {goalMessage}
-              </div>
-            </div>
-          )}
-        </div>
+        <RecordGoalCalendar selectedDate={date} onSelectDate={setDate} />
       </div>
 
       <div className="px-4 py-4 pb-[calc(14rem+env(safe-area-inset-bottom))]">
