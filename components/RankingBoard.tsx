@@ -1308,25 +1308,25 @@ function PodiumCard({
     >
       <div className="flex items-start justify-between gap-2">
         <div className="min-w-0">
-          <div className="flex items-center gap-2">
+          <div className="flex min-w-0 items-center gap-2">
             <span className="shrink-0 rounded-full bg-white/80 px-2 py-1 text-xs font-black text-gray-900">
               {rank}位
             </span>
+            <span className="truncate text-sm font-black text-gray-900">
+              {entry.name}
+            </span>
             {entry.isCurrentUser && (
-              <span className="rounded-full bg-green-600 px-2 py-0.5 text-[10px] font-bold text-white">
+              <span className="shrink-0 rounded-full bg-green-600 px-2 py-0.5 text-[10px] font-bold text-white">
                 あなた
               </span>
             )}
-          </div>
-          <div className="mt-1 truncate text-base font-black text-gray-900">
-            {entry.name}
           </div>
           <div className="mt-1 truncate text-[11px] font-bold text-gray-500">
             {details.join(" / ")}
           </div>
         </div>
         <div className="shrink-0 text-right">
-          <div className="text-xl font-black text-gray-900">
+          <div className="text-base font-black text-gray-900">
             {mainMetricValue(entry, metric)}
           </div>
           <div className="text-[10px] font-bold text-green-700">

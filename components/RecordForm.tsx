@@ -29,12 +29,11 @@ import {
 import {
   createUserFromInput,
   ensureActiveUserFromProfile,
-  getActiveUser,
   getAnonymousDisplayName,
   isAnonymousDisplayName,
   setActiveUser,
 } from "@/lib/users";
-import { fetchSharedRecords, mergeRecords, saveRecordWithSync } from "@/lib/sharedRecords";
+import { saveRecordWithSync } from "@/lib/sharedRecords";
 import { buildRecordShareText, openXShare } from "@/lib/share";
 
 const STORAGE_KEY = "ubalog-records";
@@ -46,13 +45,6 @@ const MAX_DELIVERIES = 500;
 const MAX_WORK_MINUTES = 1440;
 const MAX_COMMENT_LENGTH = 25;
 const MAX_NAME_LENGTH = 20;
-const WORK_TIME_TEMPLATES = [
-  { label: "9-15", startTime: "09:00", endTime: "15:00", breakMinutes: 30 },
-  { label: "10-16", startTime: "10:00", endTime: "16:00", breakMinutes: 30 },
-  { label: "11-17", startTime: "11:00", endTime: "17:00", breakMinutes: 30 },
-  { label: "17-22", startTime: "17:00", endTime: "22:00", breakMinutes: 0 },
-  { label: "18-23", startTime: "18:00", endTime: "23:00", breakMinutes: 0 },
-];
 
 type CongratsState = {
   type: "daily" | "weekly" | "monthly";
@@ -344,8 +336,6 @@ export default function RecordForm() {
   const [afterSaveMessage, setAfterSaveMessage] = useState("");
   const [lastSavedRecord, setLastSavedRecord] = useState<StoredRecord | null>(null);
   const [rocketBulkLaunchToken, setRocketBulkLaunchToken] = useState(0);
-  const [copyMessage, setCopyMessage] = useState("");
-  const [copyingYesterday, setCopyingYesterday] = useState(false);
 
   useEffect(() => {
     const queryDate = searchParams.get("date");
@@ -542,77 +532,6 @@ export default function RecordForm() {
     total > 0
       ? `保存内容 ${formatCurrency(total)} / ${totalDeliveriesInput.toLocaleString()}件 / 稼働${workText}`
       : "売上を入力してください";
-
-  const applyWorkTimeTemplate = (
-    template: { startTime: string; endTime: string; breakMinutes: number } | null
-  ) => {
-    if (!template) {
-      setBreakTime("0");
-      return;
-    }
-    setStartTime(template.startTime);
-    setEndTime(template.endTime);
-    setBreakTime(String(template.breakMinutes));
-  };
-
-  const applyCopiedRecord = (record: StoredRecord) => {
-    const copiedName = cleanText(
-      ((record as StoredRecord & { displayName?: string }).displayName ?? record.name ?? ""),
-      MAX_NAME_LENGTH
-    );
-    setProfileName(isAnonymousDisplayName(copiedName) ? "" : copiedName);
-    setPrefecture(cleanText(record.prefecture ?? "", 20));
-    setProfileArea(cleanText(record.area ?? "", 20));
-    setStartTime(record.startTime ?? "");
-    setEndTime(record.endTime ?? "");
-    setBreakTime(String(clampNumber(record.breakMinutes ?? 0, 0, MAX_WORK_MINUTES)));
-    setUber("");
-    setDemae("");
-    setMenu("");
-    setRocket("");
-    setOther("");
-    setUberCount(String(clampNumber(record.services.uber.deliveries ?? 0, 0, MAX_DELIVERIES)));
-    setDemaeCount(String(clampNumber(record.services.demae.deliveries ?? 0, 0, MAX_DELIVERIES)));
-    setMenuCount(String(clampNumber(record.services.menu.deliveries ?? 0, 0, MAX_DELIVERIES)));
-    setRocketCount(String(clampNumber(record.services.rocket.deliveries ?? 0, 0, MAX_DELIVERIES)));
-    setOtherCount(String(clampNumber(record.services.other.deliveries ?? 0, 0, MAX_DELIVERIES)));
-    setRanking(record.ranking !== false);
-    setComment("");
-  };
-
-  const handleCopyYesterday = async () => {
-    if (copyingYesterday) return;
-    setCopyingYesterday(true);
-    setCopyMessage("");
-    const yesterday = offsetIsoDate(-1);
-    const localRecords = loadRecords();
-    let records = localRecords;
-
-    try {
-      const remoteRecords = await fetchSharedRecords();
-      records = mergeRecords(localRecords, remoteRecords) as StoredRecord[];
-    } catch {
-      records = localRecords;
-    }
-
-    const activeUser = getActiveUser();
-    const currentName = profileName.trim() || profileDisplayName(loadProfile());
-    const yesterdayRecords = records.filter((record) => record.date === yesterday);
-    const matched =
-      yesterdayRecords.find((record) => record.userId && record.userId === activeUser?.id) ??
-      yesterdayRecords.find((record) => (record.name ?? "").trim() === currentName.trim()) ??
-      yesterdayRecords[0];
-
-    if (!matched) {
-      setCopyMessage("昨日の記録が見つかりませんでした");
-      setCopyingYesterday(false);
-      return;
-    }
-
-    applyCopiedRecord(matched);
-    setCopyMessage("昨日の時間と件数をコピーしました。金額は入力してください");
-    setCopyingYesterday(false);
-  };
 
   const handleSave = () => {
     if (saving) return;
@@ -855,19 +774,6 @@ export default function RecordForm() {
               昨日
             </button>
           </div>
-          <button
-            type="button"
-            onClick={() => void handleCopyYesterday()}
-            disabled={copyingYesterday}
-            className="mt-3 h-9 w-full rounded-xl border border-green-100 bg-green-50 px-3 text-xs font-black text-green-700 active:bg-green-100 disabled:opacity-60"
-          >
-            {copyingYesterday ? "コピー中..." : "昨日の記録をコピー"}
-          </button>
-          {copyMessage && (
-            <div className="mt-2 rounded-xl bg-gray-50 px-3 py-2 text-xs font-bold text-gray-600">
-              {copyMessage}
-            </div>
-          )}
         </div>
 
         <div className="rounded-2xl bg-white p-4 shadow-sm">
@@ -912,26 +818,6 @@ export default function RecordForm() {
                 </option>
               ))}
             </select>
-          </div>
-
-          <div className="mt-3 flex flex-wrap gap-2">
-            {WORK_TIME_TEMPLATES.map((template) => (
-              <button
-                key={template.label}
-                type="button"
-                onClick={() => applyWorkTimeTemplate(template)}
-                className="rounded-full bg-gray-100 px-3 py-1.5 text-xs font-black text-gray-700 active:bg-gray-200"
-              >
-                {template.label}
-              </button>
-            ))}
-            <button
-              type="button"
-              onClick={() => applyWorkTimeTemplate(null)}
-              className="rounded-full bg-green-50 px-3 py-1.5 text-xs font-black text-green-700 active:bg-green-100"
-            >
-              休憩なし
-            </button>
           </div>
 
           <div className="mt-4 space-y-3">
